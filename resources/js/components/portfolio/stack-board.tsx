@@ -11,14 +11,14 @@ export function StackBoard({ layers, rows }: { layers: StackLayer[]; rows: numbe
         layers.slice(0, layers.indexOf(layer)).reduce((n, l) => n + l.items.length, 0) + layer.items.indexOf(item) + 1;
 
     return (
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_300px] lg:items-start">
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start xl:gap-10">
             <div className="border-t border-white/8">
                 {layers.map((layer) => {
                     const on = selected?.layer.slug === layer.slug;
                     return (
                         <div
                             key={layer.slug}
-                            className="grid grid-cols-[56px_minmax(0,1fr)] items-start gap-x-4 gap-y-3 border-b border-white/8 py-4 sm:grid-cols-[96px_140px_minmax(0,1fr)] sm:items-center sm:gap-5"
+                            className="grid grid-cols-[56px_minmax(0,1fr)] items-start gap-x-4 gap-y-3 border-b border-white/8 py-4 sm:grid-cols-[96px_170px_minmax(0,1fr)] sm:items-center sm:gap-6"
                         >
                             <Glyph kind={layer.glyph} active={on} className="w-14 sm:w-24" />
                             <div className="min-w-0">

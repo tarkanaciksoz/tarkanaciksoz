@@ -2,54 +2,12 @@ import { apiGet, fetchTrace, ms, postClientTiming } from '@/lib/api';
 import type { ClientTiming, StackResponse, Trace } from '@/types/portfolio';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { buildSteps, LAYERS, type LayerId, type Step } from './anatomy-steps';
-import { Glyph } from './glyph';
+import { layerY, StackVisual } from './stack-visual';
+
+/** Slow motion: the whole request stretched to about this many seconds. */
+const PLAYBACK_SECONDS = 6;
 
 type Status = 'idle' | 'sending' | 'ready' | 'error';
-
-function Stack({ active, seen, totals }: { active: LayerId; seen: Set<LayerId>; totals: Record<string, number> }) {
-    return (
-        <ol className="relative">
-            <span className="absolute top-4 bottom-4 left-[15px] w-px bg-white/10" aria-hidden="true" />
-            {LAYERS.map((layer) => {
-                const on = layer.id === active;
-                const visited = seen.has(layer.id);
-                const isNode = layer.glyph === 'node';
-
-                return (
-                    <li
-                        key={layer.id}
-                        className={`relative flex items-center gap-3 py-1.5 transition-opacity ${visited ? 'opacity-100' : 'opacity-40'}`}
-                    >
-                        <span
-                            className={`relative z-10 h-[9px] w-[9px] flex-none rounded-full border transition-all ${
-                                on ? 'border-white bg-white shadow-[0_0_10px_rgba(255,255,255,.7)]' : 'border-white/25 bg-black'
-                            }`}
-                            style={{ marginLeft: 11 }}
-                        />
-                        <span className="flex h-9 w-12 flex-none items-center justify-center">
-                            {isNode ? (
-                                <span className={`block h-1.5 w-1.5 rotate-45 border ${on ? 'border-white bg-white/80' : 'border-white/30'}`} />
-                            ) : (
-                                <Glyph kind={layer.glyph} active={on} className="h-9 w-12" />
-                            )}
-                        </span>
-                        <span className="min-w-0 flex-1">
-                            <span className={`block text-[13px] leading-tight font-medium ${on ? 'text-zinc-50' : 'text-zinc-400'}`}>
-                                {layer.name}
-                            </span>
-                            <span className="block font-mono text-[10.5px] text-zinc-600">{layer.sub}</span>
-                        </span>
-                        {totals[layer.id] !== undefined && (
-                            <span className={`flex-none font-mono text-[11.5px] ${on ? 'text-zinc-100' : 'text-zinc-500'}`}>
-                                {ms(totals[layer.id])} ms
-                            </span>
-                        )}
-                    </li>
-                );
-            })}
-        </ol>
-    );
-}
 
 function Bar({ steps, activeKey, onPick }: { steps: Step[]; activeKey: string; onPick: (key: string) => void }) {
     const total = steps.reduce((n, s) => n + s.ms, 0) || 1;
@@ -120,13 +78,72 @@ export function Anatomy() {
     const [cache, setCache] = useState<string | null>(null);
     const [rows, setRows] = useState<number | null>(null);
     const [activeKey, setActiveKey] = useState<string>('');
+    const [playing, setPlaying] = useState(false);
+    const [elapsed, setElapsed] = useState<number | null>(null);
+    const [orbY, setOrbY] = useState(() => layerY('browser'));
     const stepRefs = useRef<Record<string, HTMLElement | null>>({});
+    const frame = useRef<number>(0);
+    const playhead = useRef(0);
 
     const steps = useMemo(() => (trace ? buildSteps(trace, client) : []), [trace, client]);
     const active = steps.find((s) => s.key === activeKey) ?? steps[0];
+    const total = useMemo(() => steps.reduce((n, s) => n + s.ms, 0), [steps]);
+
+    /** Runs the recorded request back at a walking pace, in its real proportions. */
+    const play = useCallback((list: Step[], speed: 'slow' | 'real') => {
+        cancelAnimationFrame(frame.current);
+        const sum = list.reduce((n, s) => n + s.ms, 0);
+        if (!sum) return;
+
+        const schedule: { step: Step; from: number; to: number; y: number; prevY: number }[] = [];
+        let clock = 0;
+        let prevY = layerY('browser');
+        list.forEach((step) => {
+            const y = layerY(step.layer);
+            schedule.push({ step, from: clock, to: clock + step.ms, y, prevY });
+            clock += step.ms;
+            prevY = y;
+        });
+
+        const factor = speed === 'real' ? 1 : (PLAYBACK_SECONDS * 1000) / sum;
+        const startedAt = performance.now();
+        setPlaying(true);
+        playhead.current = 0;
+
+        const tick = (now: number) => {
+            const at = (now - startedAt) / factor;
+
+            if (at >= sum) {
+                setElapsed(sum);
+                setActiveKey(list[list.length - 1].key);
+                setOrbY(layerY(list[list.length - 1].layer));
+                setPlaying(false);
+                return;
+            }
+
+            const current = schedule.find((s) => at >= s.from && at < s.to) ?? schedule[0];
+            const within = current.to > current.from ? (at - current.from) / (current.to - current.from) : 1;
+            const travel = Math.min(1, within / 0.4);
+
+            setElapsed(at);
+            setOrbY(current.prevY + (current.y - current.prevY) * travel);
+            if (playhead.current !== schedule.indexOf(current)) {
+                playhead.current = schedule.indexOf(current);
+                setActiveKey(current.step.key);
+            }
+
+            frame.current = requestAnimationFrame(tick);
+        };
+
+        frame.current = requestAnimationFrame(tick);
+    }, []);
 
     const send = useCallback(async () => {
+        cancelAnimationFrame(frame.current);
         setStatus('sending');
+        setPlaying(false);
+        setElapsed(null);
+
         try {
             const result = await apiGet<StackResponse>('/api/stack');
             setCache(result.cache);
@@ -141,17 +158,22 @@ export function Anatomy() {
 
             setTrace(recorded);
             setStatus('ready');
+            play(buildSteps(recorded, result.timing), 'slow');
         } catch {
             setStatus('error');
         }
-    }, []);
+    }, [play]);
+
+    useEffect(() => () => cancelAnimationFrame(frame.current), []);
 
     useEffect(() => {
         if (steps.length && !steps.some((s) => s.key === activeKey)) setActiveKey(steps[0].key);
     }, [steps, activeKey]);
 
+    /** Once the playback has finished, scrolling the steps drives the light instead. */
     useEffect(() => {
-        if (!steps.length) return;
+        if (!steps.length || playing) return;
+
         const onScroll = () => {
             const mid = window.innerHeight * 0.45;
             let current = steps[0].key;
@@ -160,14 +182,16 @@ export function Anatomy() {
                 if (el && el.getBoundingClientRect().top <= mid) current = step.key;
             }
             setActiveKey(current);
+            const step = steps.find((s) => s.key === current);
+            if (step) setOrbY(layerY(step.layer));
         };
+
         window.addEventListener('scroll', onScroll, { passive: true });
-        onScroll();
         return () => window.removeEventListener('scroll', onScroll);
-    }, [steps]);
+    }, [steps, playing]);
 
     const totals = useMemo(() => {
-        const acc: Record<string, number> = {};
+        const acc: Partial<Record<LayerId, number>> = {};
         steps.forEach((s) => {
             if (s.depth === 0 || s.kind === 'server') acc[s.layer] = (acc[s.layer] ?? 0) + s.ms;
         });
@@ -181,11 +205,21 @@ export function Anatomy() {
         return set;
     }, [steps, active]);
 
+    const jumpToLayer = useCallback(
+        (id: LayerId) => {
+            const step = steps.find((s) => s.layer === id);
+            if (step) stepRefs.current[step.key]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        },
+        [steps],
+    );
+
     return (
         <div>
             <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-white/10 bg-[#0a0a0b] px-4 py-3">
                 <div className="min-w-0 font-mono text-[12.5px] text-zinc-400">
-                    <span className="mr-2 inline-block h-1.5 w-1.5 rounded-full bg-white align-middle shadow-[0_0_8px_#fff]" />
+                    <span
+                        className={`mr-2 inline-block h-1.5 w-1.5 rounded-full align-middle ${playing ? 'animate-pulse bg-white shadow-[0_0_10px_#fff]' : 'bg-white/60'}`}
+                    />
                     GET <span className="text-zinc-100">/api/stack</span>
                     {trace && (
                         <span className="ml-1">
@@ -194,14 +228,34 @@ export function Anatomy() {
                         </span>
                     )}
                 </div>
-                <button
-                    type="button"
-                    onClick={send}
-                    disabled={status === 'sending'}
-                    className="rounded-lg bg-white px-4 py-2 text-sm font-medium text-black transition-colors hover:bg-zinc-200 disabled:opacity-50"
-                >
-                    {status === 'idle' ? 'Send the request' : status === 'sending' ? 'Sending…' : 'Send it again'}
-                </button>
+                <div className="flex flex-wrap items-center gap-3">
+                    {trace && !playing && (
+                        <>
+                            <button
+                                type="button"
+                                onClick={() => play(steps, 'slow')}
+                                className="font-mono text-[12.5px] text-zinc-500 underline decoration-white/25 underline-offset-4 hover:text-zinc-100"
+                            >
+                                replay slowly
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => play(steps, 'real')}
+                                className="font-mono text-[12.5px] text-zinc-500 underline decoration-white/25 underline-offset-4 hover:text-zinc-100"
+                            >
+                                1× real time
+                            </button>
+                        </>
+                    )}
+                    <button
+                        type="button"
+                        onClick={send}
+                        disabled={status === 'sending' || playing}
+                        className="rounded-lg bg-white px-4 py-2 text-sm font-medium text-black transition-colors hover:bg-zinc-200 disabled:opacity-50"
+                    >
+                        {status === 'idle' ? 'Send the request' : status === 'sending' ? 'Sending…' : playing ? 'Playing…' : 'Send it again'}
+                    </button>
+                </div>
             </div>
 
             {status === 'error' && (
@@ -218,16 +272,33 @@ export function Anatomy() {
             )}
 
             {trace && active && (
-                <div className="mt-6 grid gap-8 lg:grid-cols-2 lg:items-start lg:gap-14">
-                    <div className="top-16 hidden lg:sticky lg:block">
-                        <Stack active={active.layer} seen={seen} totals={totals} />
-                        <div className="mt-4">
-                            <div className="mb-2 flex items-baseline justify-between gap-3 font-mono text-[11px] tracking-[0.12em] text-zinc-500 uppercase">
-                                <span>
-                                    Where the time went · <span className="text-zinc-200">{active.title}</span>
+                <div className="mt-6 grid gap-8 lg:grid-cols-[minmax(0,460px)_minmax(0,1fr)] lg:items-start lg:gap-16">
+                    <div className="top-16 hidden max-h-[calc(100vh-5rem)] lg:sticky lg:block">
+                        <div className="flex items-baseline gap-2">
+                            <span className="font-mono text-4xl font-medium text-zinc-50 tabular-nums">{ms(elapsed ?? total)}</span>
+                            <span className="font-mono text-sm text-zinc-500">ms{playing ? ' · playing' : ' · end to end'}</span>
+                        </div>
+                        <StackVisual
+                            className="mx-auto max-h-[56vh] w-full"
+                            active={active.layer}
+                            seen={seen}
+                            totals={totals}
+                            orbY={orbY}
+                            flying={playing}
+                            onPick={jumpToLayer}
+                            format={ms}
+                        />
+                        <div className="mt-2 min-h-[72px] rounded-lg border border-white/8 bg-white/[0.02] px-4 py-3">
+                            <div className="flex items-baseline justify-between gap-3">
+                                <span className="truncate text-[15px] font-medium text-zinc-50">{active.title}</span>
+                                <span className={`shrink-0 font-mono text-[13px] ${active.slow ? 'text-orange-400' : 'text-zinc-300'}`}>
+                                    {ms(active.ms)} ms
                                 </span>
-                                <span className="text-zinc-200">{ms(active.ms)} ms</span>
                             </div>
+                            <p className="mt-1 line-clamp-2 text-[13px] text-zinc-400">{active.detail}</p>
+                        </div>
+                        <div className="mt-3">
+                            <div className="mb-2 font-mono text-[11px] tracking-[0.12em] text-zinc-500 uppercase">Where the time went</div>
                             <Bar
                                 steps={steps}
                                 activeKey={active.key}
@@ -240,7 +311,26 @@ export function Anatomy() {
                         </div>
                     </div>
 
-                    <div className="lg:hidden">
+                    <div className="sticky top-14 z-20 -mx-4 border-b border-white/8 bg-black/90 px-4 pt-3 pb-3 backdrop-blur lg:hidden">
+                        <div className="flex items-baseline justify-between gap-3">
+                            <span className="font-mono text-2xl font-medium text-zinc-50 tabular-nums">
+                                {ms(elapsed ?? total)} <span className="text-sm text-zinc-500">ms{playing ? ' · playing' : ''}</span>
+                            </span>
+                            <span className={`shrink-0 font-mono text-[12px] ${active.slow ? 'text-orange-400' : 'text-zinc-400'}`}>
+                                {ms(active.ms)} ms
+                            </span>
+                        </div>
+                        <StackVisual
+                            className="mx-auto my-2 max-h-[34vh] w-full"
+                            active={active.layer}
+                            seen={seen}
+                            totals={totals}
+                            orbY={orbY}
+                            flying={playing}
+                            onPick={jumpToLayer}
+                            format={ms}
+                        />
+                        <div className="mb-2 truncate text-[14px] font-medium text-zinc-100">{active.title}</div>
                         <Bar steps={steps} activeKey={active.key} onPick={setActiveKey} />
                     </div>
 
@@ -251,7 +341,9 @@ export function Anatomy() {
                                 ref={(el) => {
                                     stepRefs.current[step.key] = el;
                                 }}
-                                className="scroll-mt-24 border-t border-white/8 py-8 first:border-t-0 lg:py-[9vh]"
+                                className={`scroll-mt-24 border-t border-white/8 py-8 transition-opacity first:border-t-0 lg:py-[9vh] ${
+                                    step.key === active.key ? 'opacity-100' : 'opacity-55'
+                                }`}
                             >
                                 <div className="flex flex-wrap items-baseline gap-2 font-mono text-[11px] tracking-[0.12em] uppercase">
                                     <span className="text-sky-300">{String(i + 1).padStart(2, '0')}</span>

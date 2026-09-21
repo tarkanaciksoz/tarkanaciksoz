@@ -44,7 +44,7 @@ export default function Home() {
 
             <div className="min-h-screen bg-black text-zinc-100 selection:bg-white selection:text-black">
                 <header className="sticky top-0 z-30 border-b border-white/8 bg-black/70 backdrop-blur">
-                    <div className="mx-auto flex h-14 max-w-5xl items-center justify-between gap-4 px-4 sm:px-6">
+                    <div className="mx-auto flex h-14 w-full max-w-[1600px] items-center justify-between gap-4 px-4 sm:px-8 lg:px-12">
                         <a href="#top" className="text-sm font-medium">
                             {p?.name ?? '—'}
                             <span className="ml-2 hidden font-mono text-[11px] text-zinc-500 sm:inline">backend · infrastructure</span>
@@ -66,17 +66,17 @@ export default function Home() {
                     </div>
                 </header>
 
-                <main id="top" className="mx-auto max-w-5xl px-4 pb-24 sm:px-6">
+                <main id="top" className="mx-auto w-full max-w-[1600px] px-4 pb-24 sm:px-8 lg:px-12">
                     <section className="pt-14 pb-8 sm:pt-20">
                         <div className="font-mono text-[11px] tracking-[0.14em] text-zinc-500 uppercase">
                             {p?.role ?? 'Backend engineer'} · {p?.location ?? 'Istanbul'}
                         </div>
-                        <h1 className="mt-4 max-w-[19ch] text-3xl leading-[1.08] font-medium tracking-tight text-balance sm:text-5xl">
+                        <h1 className="mt-4 max-w-[20ch] text-3xl leading-[1.05] font-medium tracking-tight text-balance sm:text-5xl lg:text-6xl">
                             {p?.headline ?? 'I build and run the backends behind consumer mobile apps.'}
                         </h1>
-                        <p className="mt-5 max-w-[58ch] text-[17px] text-zinc-400">{p?.intro ?? ''}</p>
+                        <p className="mt-5 max-w-[62ch] text-[17px] text-zinc-400 lg:text-lg">{p?.intro ?? ''}</p>
                         {p?.focus?.length ? (
-                            <ul className="mt-6 grid gap-2 text-[15px] text-zinc-300 sm:grid-cols-3">
+                            <ul className="mt-6 grid max-w-4xl gap-2 text-[15px] text-zinc-300 sm:grid-cols-3">
                                 {p.focus.map((line) => (
                                     <li key={line} className="border-t border-white/10 pt-2.5">
                                         {line}
@@ -139,7 +139,7 @@ export default function Home() {
                         </section>
                     ) : (
                         <section>
-                            <p className="mb-6 max-w-[64ch] text-zinc-400">
+                            <p className="mb-6 max-w-[70ch] text-zinc-400">
                                 The map on the other tab is one request. Here is that request, opened up: what the browser measured, what the server
                                 did, the SQL with the database's own plan, and the lines of deployed code each step came from.
                             </p>
@@ -152,7 +152,7 @@ export default function Home() {
                         <h2 className="mt-3 max-w-[22ch] text-2xl leading-tight font-medium tracking-tight text-balance sm:text-3xl">
                             What I have built, and the problem each piece answers
                         </h2>
-                        <div className="mt-8 grid gap-3 sm:grid-cols-2">
+                        <div className="mt-8 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                             {(systems.data ?? []).map((system) => (
                                 <article key={system.slug} className="rounded-xl border border-white/8 bg-[#0a0a0b] p-5 sm:p-6">
                                     <h3 className="text-lg leading-snug font-medium">{system.title}</h3>
@@ -190,7 +190,7 @@ export default function Home() {
                         <h2 className="mt-3 max-w-[24ch] text-2xl leading-tight font-medium tracking-tight text-balance sm:text-3xl">
                             How I run servers, and what taught me each rule
                         </h2>
-                        <div className="mt-8 grid gap-x-10 sm:grid-cols-2">
+                        <div className="mt-8 grid gap-x-12 sm:grid-cols-2 xl:grid-cols-3">
                             {(decisions.data ?? []).map((decision) => (
                                 <div key={decision.id} className="border-b border-white/8 py-4">
                                     <h3 className="text-[15px] font-medium">{decision.title}</h3>
