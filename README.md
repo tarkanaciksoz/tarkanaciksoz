@@ -36,6 +36,8 @@ Everything the page shows comes from these endpoints. There is no data in the HT
 | GET | `/api/decisions` | Operating rules and what taught each one |
 | GET | `/api/traces/{id}` | A recorded request: spans, SQL, query plans, source |
 | POST | `/api/traces/{id}/client-timing` | Browser timings the server cannot measure |
+| POST | `/api/terminal` | Run a command in the home-page terminal; streams plain text |
+| GET | `/api/terminal/fs` | The terminal's directory tree, shared with tab completion |
 
 Responses are cached for five minutes and carry `Cache-Status`. The public rate limit is 60
 requests a minute per address.
@@ -78,6 +80,24 @@ How it fits together:
 Traces live in the cache for `TRACING_TTL_MINUTES` (default one day). Turn the whole thing
 off with `TRACING_ENABLED=false`; set `APP_COMMIT` in deploys where `git` is not available.
 
+## Terminal
+
+The prompt under `whoami` is a shell played by `gpt-5.6-luna` through the Responses API.
+It streams its output as it is written, never breaks character, grounds file contents in
+the site's own data (`cat stack.json` is the real stack), and teases anyone who tries to
+break the box. Tab completion, history and the prompt's working directory are local.
+
+```bash
+OPENAI_API_KEY=sk-...                 # without it the shell prints "backend offline"
+OPENAI_TERMINAL_MODEL=gpt-5.6-luna
+TERMINAL_PER_MINUTE=15                # per address
+TERMINAL_PER_DAY=200                  # per address
+TERMINAL_SITE_PER_DAY=3000            # whole site, so a public endpoint cannot run up a bill
+```
+
+Requests are sent with `store: false`, reasoning effort `none` and a 400-token output cap;
+the last six exchanges are replayed so the session stays consistent.
+
 ## Tests
 
 ```bash
@@ -85,9 +105,9 @@ php artisan test
 ./vendor/bin/pint
 ```
 
-44 tests cover the endpoints, the cache behaviour (second request touches no database), the
+54 tests cover the endpoints, the cache behaviour (second request touches no database), the
 recorded spans, the attribute explanations, the query plans, the unattributed arithmetic,
-and the OpenAPI document.
+the terminal's streaming, grounding, errors and rate limits, and the OpenAPI document.
 
 ## Content
 

@@ -1,10 +1,11 @@
 import { Anatomy } from '@/components/portfolio/anatomy';
+import { StackIndex } from '@/components/portfolio/stack-index';
+import { Ambient } from '@/components/signal/ambient';
 import { DecodeText } from '@/components/signal/decode-text';
 import { GlitchBurst } from '@/components/signal/glitch-burst';
-import { Prompt } from '@/components/signal/prompt';
 import { SignalPanel } from '@/components/signal/signal-panel';
 import { TearDivider } from '@/components/signal/tear-divider';
-import { StackExplorer } from '@/components/stack-views/stack-explorer';
+import { Terminal } from '@/components/terminal/terminal';
 import { apiGet } from '@/lib/api';
 import type { Decision, Profile, StackResponse, System } from '@/types/portfolio';
 import { Head } from '@inertiajs/react';
@@ -49,6 +50,7 @@ export default function Home() {
             <Head title={p ? `${p.name} · ${p.role}` : 'Backend & infrastructure engineer'} />
 
             <div className="grain relative min-h-screen bg-black text-zinc-100 selection:bg-[#ff3b30] selection:text-black">
+                <Ambient />
                 <header className="sticky top-0 z-30 border-b border-white/8 bg-black/70 backdrop-blur">
                     <div className="mx-auto flex h-14 w-full max-w-[1600px] items-center justify-between gap-4 px-4 sm:px-8 lg:px-12">
                         <a href="#top" className="text-sm font-medium whitespace-nowrap">
@@ -85,17 +87,12 @@ export default function Home() {
                     </div>
                 </header>
 
-                <main id="top" className="mx-auto w-full max-w-[1600px] px-4 pb-24 sm:px-8 lg:px-12">
+                <main id="top" className="relative z-10 mx-auto w-full max-w-[1600px] px-4 pb-28 sm:px-8 lg:px-12">
                     <section className="relative z-10 grid gap-10 pt-14 pb-8 sm:pt-20 xl:grid-cols-[minmax(0,1fr)_480px] xl:items-center xl:gap-16">
                         <div>
-                            <Prompt
-                                command="whoami"
-                                output={
-                                    <div className="font-mono text-[11px] tracking-[0.14em] text-zinc-500 uppercase">
-                                        {p?.role ?? 'Backend engineer'} · {p?.location ?? 'Istanbul'}
-                                    </div>
-                                }
-                            />
+                            <div className="max-w-2xl">
+                                <Terminal owner="tarkan" intro={`${p?.role ?? 'Backend & infrastructure engineer'} · ${p?.location ?? 'Istanbul'}`} />
+                            </div>
                             <GlitchBurst
                                 as="h1"
                                 every={[5, 11]}
@@ -132,7 +129,7 @@ export default function Home() {
                         <div className="mt-8">
                             {stack ? (
                                 <>
-                                    <StackExplorer layers={stack.data} rows={stack.meta.items} />
+                                    <StackIndex layers={stack.data} />
                                     <div className="mt-6 flex flex-wrap items-center justify-between gap-4 rounded-sm border border-white/15 bg-[#050506] px-4 py-3">
                                         <p className="font-mono text-[12.5px] text-zinc-400">
                                             This map is not markup. It is{' '}
