@@ -1,5 +1,5 @@
 import { Anatomy } from '@/components/portfolio/anatomy';
-import { StackIndex } from '@/components/portfolio/stack-index';
+import { PeriodicStack } from '@/components/portfolio/periodic-stack';
 import { Ambient } from '@/components/signal/ambient';
 import { DecodeText } from '@/components/signal/decode-text';
 import { GlitchBurst } from '@/components/signal/glitch-burst';
@@ -7,6 +7,7 @@ import { SignalPanel } from '@/components/signal/signal-panel';
 import { TearDivider } from '@/components/signal/tear-divider';
 import { Terminal } from '@/components/terminal/terminal';
 import { apiGet } from '@/lib/api';
+import { enableSmoothAnchors } from '@/lib/smooth-scroll';
 import type { Decision, Profile, StackResponse, System } from '@/types/portfolio';
 import { Head } from '@inertiajs/react';
 import { useEffect, useState } from 'react';
@@ -44,6 +45,8 @@ export default function Home() {
     }, []);
 
     const p = profile.data;
+
+    useEffect(() => enableSmoothAnchors(), []);
 
     return (
         <>
@@ -129,7 +132,7 @@ export default function Home() {
                         <div className="mt-8">
                             {stack ? (
                                 <>
-                                    <StackIndex layers={stack.data} />
+                                    <PeriodicStack layers={stack.data} />
                                     <div className="mt-6 flex flex-wrap items-center justify-between gap-4 rounded-sm border border-white/15 bg-[#050506] px-4 py-3">
                                         <p className="font-mono text-[12.5px] text-zinc-400">
                                             This map is not markup. It is{' '}

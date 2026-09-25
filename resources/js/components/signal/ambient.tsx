@@ -1,23 +1,36 @@
 import { useEffect, useRef } from 'react';
 
-// Pixel sprites, drawn facing right; pirates are mirrored. x = hull and sail, r = flag.
-const PACKET = ['....x....', '....xx...', '....xxx..', '....xxxx.', '....x....', 'xxxxxxxxx', '.xxxxxxx.'];
-const PIRATE = ['....rr...', '....r....', '...xxxx..', '..xxxxx..', '....x....', 'xxxxxxxxx', '.xxxxxxx.'];
-
-type Bit = { x: number; y: number; vy: number; ch: string; a: number; size: number; red: boolean };
-type Ship = { x: number; dir: 1 | -1; side: 'packet' | 'pirate'; hp: number; speed: number; phase: number; sink: number; cooldown: number };
-type Ball = { x: number; y: number; vx: number; vy: number; t: number; life: number; target: Ship; side: Ship['side'] };
-type Spark = { x: number; y: number; vx: number; vy: number; life: number; red: boolean };
-type Tag = { x: number; y: number; text: string; life: number };
-
-const G = 0.06;
-const rand = (a: number, b: number) => a + Math.random() * (b - a);
-
-/**
- * The page's background: sparse bits falling through the dark, and along the
- * bottom edge a very small naval war between packets and pirates. Drawn at
- * 30 fps on one canvas, paused when the tab is hidden, frozen for reduced motion.
+/*
+ * The page's background. Two layers on one canvas:
+ *
+ * 1. Bits: sparse 0s and 1s falling. When one flips it glitches for a few
+ *    frames — noise characters, split red and cyan — before it settles.
+ * 2. A byte war, after Core War (1984): the screen is a memory grid, and two
+ *    factions of tiny programs fight in it. Imps crawl forward copying themselves
+ *    and leave a trail of bytes; dwarfs drop 00 bombs at a fixed stride. An imp that
+ *    steps onto an enemy bomb dies (SIGSEGV); an imp that runs over an enemy dwarf's
+ *    code takes it over (pwned). The dead respawn somewhere else.
+ *
+ * 30 fps, paused while the tab is hidden, a single still frame for reduced motion.
  */
+
+type Side = 0 | 1; // 0 white, 1 red
+type Bit = { x: number; y: number; vy: number; ch: string; a: number; size: number; red: boolean; glitch: number };
+type Proc = { kind: 'imp' | 'dwarf'; side: Side; pos: number; stride: number; k: number; alive: boolean; respawn: number };
+type Label = { x: number; y: number; text: string; side: Side; life: number };
+
+const NOISE = '#%&@$*+=<>/\\|{}[]?!';
+const CELL_W = 24;
+const CELL_H = 18;
+const TICK_MS = 150;
+// Kept deliberately sparse: this sits behind text.
+const TRAIL_TTL = 3.5;
+const BOMB_TTL = 6;
+const DWARF_EVERY = 3;
+
+const rand = (a: number, b: number) => a + Math.random() * (b - a);
+const pick = <T,>(xs: T[]) => xs[(Math.random() * xs.length) | 0];
+
 export function Ambient() {
     const ref = useRef<HTMLCanvasElement>(null);
 
@@ -30,32 +43,61 @@ export function Ambient() {
         let W = 0;
         let H = 0;
         let dpr = 1;
+        let cols = 0;
+        let rows = 0;
+        let N = 0;
+
+        // Core memory: one byte per cell, who wrote it, what it is, how old, whether it glitches.
+        let value = new Uint8Array(0);
+        let owner = new Int8Array(0); // -1 none, 0 white, 1 red
+        let kind = new Uint8Array(0); // 0 empty, 1 trail, 2 bomb, 3 code
+        let age = new Float32Array(0);
+        let glitch = new Uint8Array(0);
+        const live = new Set<number>();
+
         let bits: Bit[] = [];
-        let ships: Ship[] = [];
-        let balls: Ball[] = [];
-        let sparks: Spark[] = [];
-        let tags: Tag[] = [];
-        const respawn: { side: Ship['side']; at: number }[] = [];
-        let frame = 0;
+        let procs: Proc[] = [];
+        let labels: Label[] = [];
         let raf = 0;
         let last = 0;
+        let lastTick = 0;
+        let now = 0;
 
-        const perSide = () => (W < 640 ? 1 : 2);
-        const px = () => 2;
-        const seaY = () => H - 22;
+        const write = (i: number, v: number, side: Side, k: number) => {
+            value[i] = v;
+            owner[i] = side;
+            kind[i] = k;
+            age[i] = 0;
+            live.add(i);
+        };
 
-        const spawnShip = (side: Ship['side']): Ship => ({
-            x: side === 'packet' ? rand(-120, -30) : W + rand(30, 120),
-            dir: side === 'packet' ? 1 : -1,
-            side,
-            hp: 3,
-            speed: rand(0.22, 0.4),
-            phase: rand(0, Math.PI * 2),
-            sink: 0,
-            cooldown: rand(40, 120),
-        });
+        const shake = (i: number) => {
+            for (let dy = 0; dy <= 0; dy++)
+                for (let dx = -1; dx <= 1; dx++) {
+                    const c = (i % cols) + dx;
+                    const r = Math.floor(i / cols) + dy;
+                    if (c < 0 || r < 0 || c >= cols || r >= rows) continue;
+                    const j = r * cols + c;
+                    glitch[j] = 8 + ((Math.random() * 6) | 0);
+                    if (!kind[j]) write(j, (Math.random() * 256) | 0, owner[i] === 1 ? 1 : 0, 1);
+                }
+        };
 
-        const resize = () => {
+        const say = (i: number, text: string, side: Side) => {
+            labels.push({ x: (i % cols) * CELL_W, y: Math.floor(i / cols) * CELL_H - 4, text, side, life: 60 });
+        };
+
+        const spawn = (p: Proc) => {
+            p.alive = true;
+            p.pos = (Math.random() * N) | 0;
+            p.k = 0;
+            if (p.kind === 'dwarf') {
+                // A dwarf is four cells of code; that is what an enemy imp can overwrite.
+                for (let d = 0; d < 4; d++) write((p.pos + d) % N, [0x00, 0x01, 0x7a, 0x04][d], p.side, 3);
+            }
+        };
+
+        const reset = () => {
             dpr = Math.min(window.devicePixelRatio || 1, 2);
             W = window.innerWidth;
             H = window.innerHeight;
@@ -64,184 +106,216 @@ export function Ambient() {
             canvas.style.width = `${W}px`;
             canvas.style.height = `${H}px`;
 
-            const count = Math.max(28, Math.min(110, Math.round((W * H) / 16000)));
+            cols = Math.max(8, Math.floor(W / CELL_W));
+            rows = Math.max(8, Math.floor(H / CELL_H));
+            N = cols * rows;
+            value = new Uint8Array(N);
+            owner = new Int8Array(N).fill(-1);
+            kind = new Uint8Array(N);
+            age = new Float32Array(N);
+            glitch = new Uint8Array(N);
+            live.clear();
+
+            procs = [];
+            for (const side of [0, 1] as Side[]) {
+                procs.push({ kind: 'imp', side, pos: 0, stride: 1, k: 0, alive: false, respawn: 0 });
+                procs.push({ kind: 'dwarf', side, pos: 0, stride: pick([5, 7, 9]), k: 0, alive: false, respawn: 0 });
+            }
+            procs.forEach(spawn);
+
+            const count = Math.max(12, Math.min(36, Math.round((W * H) / 45000)));
             bits = Array.from({ length: count }, () => ({
                 x: rand(0, W),
                 y: rand(0, H),
-                vy: rand(0.25, 0.8),
+                vy: rand(0.25, 0.75),
                 ch: Math.random() < 0.5 ? '0' : '1',
-                a: rand(0.05, 0.17),
+                a: rand(0.05, 0.14),
                 size: rand(9, 12),
-                red: Math.random() < 0.06,
+                red: Math.random() < 0.07,
+                glitch: 0,
             }));
+        };
 
-            if (!ships.length) {
-                ships = [
-                    ...Array.from({ length: perSide() }, () => spawnShip('packet')),
-                    ...Array.from({ length: perSide() }, () => spawnShip('pirate')),
-                ];
-                // Start mid-voyage so the first frame already has a scene in it.
-                ships.forEach((s, i) => (s.x = s.side === 'packet' ? W * (0.08 + i * 0.12) : W * (0.92 - (i - perSide()) * 0.12)));
+        // One instruction per process per tick.
+        let tickCount = 0;
+        const tick = () => {
+            tickCount++;
+            for (const p of procs) {
+                if (!p.alive) {
+                    if (now >= p.respawn) spawn(p);
+                    continue;
+                }
+
+                if (p.kind === 'imp') {
+                    const next = (p.pos + 1) % N;
+                    if (kind[next] === 2 && owner[next] !== p.side) {
+                        // Stepped on an enemy bomb.
+                        p.alive = false;
+                        p.respawn = now + rand(2500, 5000);
+                        shake(next);
+                        say(next, pick(['SIGSEGV', 'core dumped', 'segfault xd']), p.side);
+                        continue;
+                    }
+                    if (kind[next] === 3 && owner[next] !== p.side) {
+                        // Ran over an enemy dwarf's code: it now runs ours.
+                        const victim = procs.find((q) => q.kind === 'dwarf' && q.alive && q.side !== p.side && (next - q.pos + N) % N < 4);
+                        if (victim) {
+                            victim.alive = false;
+                            victim.respawn = now + rand(3000, 6000);
+                            for (let d = 0; d < 4; d++) write((victim.pos + d) % N, 0x01, p.side, 1);
+                            shake(next);
+                            say(next, pick(['pwned', 'pwned xd', 'owned lol']), p.side);
+                        }
+                    }
+                    write(p.pos, 0x01, p.side, 1); // MOV 0, 1 — the trail it leaves
+                    p.pos = next;
+                    glitch[p.pos] = 0;
+                } else {
+                    // DAT bomb at base + k * stride, skipping its own code, every few ticks.
+                    if ((tickCount + (p.side === 1 ? 1 : 0)) % DWARF_EVERY !== 0) continue;
+                    p.k++;
+                    const target = (p.pos + 4 + p.k * p.stride) % N;
+                    const victim = procs.find((q) => q.kind === 'imp' && q.alive && q.side !== p.side && q.pos === target);
+                    write(target, 0x00, p.side, 2);
+                    if (victim) {
+                        victim.alive = false;
+                        victim.respawn = now + rand(2500, 5000);
+                        shake(target);
+                        say(target, pick(['SIGSEGV', '0xDEAD', 'rip xd']), victim.side);
+                    }
+                    if (p.k * p.stride > N) p.k = 0;
+                }
+            }
+
+            // Memory decays: trails fade in seconds, bombs last longer, code stays while it runs.
+            for (const i of live) {
+                age[i] += TICK_MS / 1000;
+                const ttl = kind[i] === 1 ? TRAIL_TTL : kind[i] === 2 ? BOMB_TTL : 9999;
+                if (age[i] > ttl && !glitch[i]) {
+                    kind[i] = 0;
+                    owner[i] = -1;
+                    live.delete(i);
+                }
             }
         };
 
-        const drawSprite = (ship: Ship, y: number, alpha: number) => {
-            const sprite = ship.side === 'packet' ? PACKET : PIRATE;
-            const s = px();
-            const w = sprite[0].length * s;
-            sprite.forEach((row, ry) => {
-                [...row].forEach((c, rx) => {
-                    if (c === '.') return;
-                    const col = ship.dir === 1 ? rx : row.length - 1 - rx;
-                    ctx.fillStyle = c === 'r' ? `rgba(255,59,48,${alpha * 1.6})` : `rgba(255,255,255,${alpha})`;
-                    ctx.fillRect(Math.round(ship.x - w / 2 + col * s), Math.round(y - sprite.length * s + ry * s), s, s);
-                });
-            });
-        };
-
-        const fire = (shooter: Ship, target: Ship) => {
-            const t = rand(42, 58);
-            const sx = shooter.x + shooter.dir * 8;
-            const sy = seaY() - 8;
-            balls.push({ x: sx, y: sy, vx: (target.x - sx) / t, vy: (0 - 0.5 * G * t * t) / t, t: 0, life: t, target, side: shooter.side });
-        };
-
-        const burst = (x: number, y: number, n: number, red: boolean) => {
-            for (let i = 0; i < n; i++)
-                sparks.push({ x, y, vx: rand(-1.2, 1.2), vy: rand(-1.8, -0.3), life: rand(18, 34), red: red && Math.random() < 0.7 });
-        };
-
         const step = () => {
-            frame++;
-            const sea = seaY();
-
             bits.forEach((b) => {
                 b.y += b.vy;
-                if (Math.random() < 0.006) b.ch = b.ch === '0' ? '1' : '0';
-                if (b.y > sea - 6) {
+                if (b.glitch > 0) b.glitch--;
+                else if (Math.random() < 0.006) {
+                    b.ch = b.ch === '0' ? '1' : '0';
+                    b.glitch = 7;
+                }
+                if (b.y > H + 12) {
                     b.y = -12;
                     b.x = rand(0, W);
                 }
             });
-
-            ships.forEach((ship) => {
-                if (ship.sink > 0) {
-                    ship.sink += 0.012;
-                    return;
-                }
-                const enemy = ships
-                    .filter((o) => o.side !== ship.side && o.sink === 0 && (o.x - ship.x) * ship.dir > 0)
-                    .sort((a, b) => Math.abs(a.x - ship.x) - Math.abs(b.x - ship.x))[0];
-                const near = enemy && Math.abs(enemy.x - ship.x) < 380;
-                ship.x += ship.dir * (near ? 0.05 : ship.speed);
-                if (near && --ship.cooldown <= 0) {
-                    fire(ship, enemy);
-                    ship.cooldown = rand(70, 150);
-                }
+            labels = labels.filter((l) => {
+                l.y -= 0.25;
+                return --l.life > 0;
             });
-
-            balls = balls.filter((ball) => {
-                ball.t++;
-                ball.x += ball.vx;
-                ball.vy += G;
-                ball.y += ball.vy;
-                if (ball.t < ball.life) return true;
-
-                const hit = ball.target.sink === 0 && Math.random() < 0.5;
-                if (hit) {
-                    ball.target.hp--;
-                    burst(ball.target.x, sea - 8, 12, true);
-                    if (ball.target.hp <= 0) {
-                        ball.target.sink = 0.001;
-                        tags.push({ x: ball.target.x, y: sea - 22, text: ball.target.side === 'packet' ? '-1 packet xd' : 'rst', life: 110 });
-                    }
-                } else {
-                    burst(ball.x, sea, 5, false);
-                }
-                return false;
-            });
-
-            sparks = sparks.filter((s) => {
-                s.x += s.vx;
-                s.vy += 0.08;
-                s.y += s.vy;
-                return --s.life > 0;
-            });
-            tags = tags.filter((t) => {
-                t.y -= 0.2;
-                return --t.life > 0;
-            });
-
-            ships = ships.filter((ship) => {
-                const gone = ship.sink >= 1 || ship.x < -160 || ship.x > W + 160;
-                if (gone) respawn.push({ side: ship.side, at: frame + Math.round(rand(160, 340)) });
-                return !gone;
-            });
-            for (let i = respawn.length - 1; i >= 0; i--) {
-                if (respawn[i].at <= frame && ships.filter((s) => s.side === respawn[i].side).length < perSide()) {
-                    ships.push(spawnShip(respawn[i].side));
-                    respawn.splice(i, 1);
-                }
-            }
+            for (const i of live) if (glitch[i]) glitch[i]--;
         };
+
+        const mono = (px: number) => `${px}px ui-monospace, SFMono-Regular, Menlo, monospace`;
+        const hex = (v: number) => v.toString(16).toUpperCase().padStart(2, '0');
 
         const draw = () => {
             ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
             ctx.clearRect(0, 0, W, H);
-            const sea = seaY();
-
             ctx.textBaseline = 'top';
-            bits.forEach((b) => {
-                ctx.font = `${b.size}px ui-monospace, SFMono-Regular, Menlo, monospace`;
-                ctx.fillStyle = b.red ? `rgba(255,59,48,${b.a * 1.4})` : `rgba(255,255,255,${b.a})`;
-                ctx.fillText(b.ch, b.x, b.y);
-            });
 
-            // The sea: a dotted line with a slow swell.
-            for (let x = 0; x < W; x += 4) {
-                const y = sea + Math.round(Math.sin(x / 38 + frame / 30) * 1.2);
-                ctx.fillStyle = 'rgba(255,255,255,0.12)';
-                ctx.fillRect(x, y, 1, 1);
+            // Core memory.
+            ctx.font = mono(10);
+            const heads = new Set(procs.filter((p) => p.alive && p.kind === 'imp').map((p) => p.pos));
+            for (const i of live) {
+                const x = (i % cols) * CELL_W + 3;
+                const y = Math.floor(i / cols) * CELL_H + 3;
+                const side = owner[i];
+                const k = kind[i];
+                const ttl = k === 1 ? TRAIL_TTL : k === 2 ? BOMB_TTL : 9999;
+                const fade = k === 3 ? 1 : Math.max(0, 1 - age[i] / ttl);
+                const base = k === 3 ? 0.2 : k === 2 ? 0.15 : 0.08;
+                const a = base * fade;
+                if (a < 0.01 && !glitch[i]) continue;
+
+                const rgb = side === 1 ? '255,59,48' : '255,255,255';
+                if (glitch[i]) {
+                    const t = pick([...NOISE]) + pick([...NOISE]);
+                    ctx.fillStyle = 'rgba(255,59,48,0.32)';
+                    ctx.fillText(t, x - 2, y);
+                    ctx.fillStyle = 'rgba(34,211,238,0.28)';
+                    ctx.fillText(t, x + 2, y);
+                    ctx.fillStyle = `rgba(${rgb},0.35)`;
+                    ctx.fillText(t, x, y);
+                } else {
+                    ctx.fillStyle = `rgba(${rgb},${a.toFixed(3)})`;
+                    ctx.fillText(hex(value[i]), x, y);
+                }
             }
 
-            ships.forEach((ship) => {
-                const bob = Math.sin(frame / 18 + ship.phase) * 1.2;
-                drawSprite(ship, sea - 1 + bob + ship.sink * 16, 0.34 * (1 - ship.sink));
-            });
+            // Imp heads: a bright cursor on the cell it is about to execute.
+            for (const p of procs) {
+                if (!p.alive || p.kind !== 'imp' || !heads.has(p.pos)) continue;
+                const x = (p.pos % cols) * CELL_W + 2;
+                const y = Math.floor(p.pos / cols) * CELL_H + 2;
+                ctx.fillStyle = p.side === 1 ? 'rgba(255,59,48,0.4)' : 'rgba(255,255,255,0.3)';
+                ctx.fillRect(x, y, 14, 12);
+            }
 
-            balls.forEach((b) => {
-                ctx.fillStyle = b.side === 'pirate' ? 'rgba(255,59,48,0.8)' : 'rgba(255,255,255,0.7)';
-                ctx.fillRect(Math.round(b.x), Math.round(b.y), 2, 2);
-            });
+            // Falling bits, glitching as they flip.
+            for (const b of bits) {
+                ctx.font = mono(b.size);
+                const rgb = b.red ? '255,59,48' : '255,255,255';
+                if (b.glitch > 0) {
+                    const c = b.glitch > 2 ? pick([...NOISE, '0', '1']) : b.ch;
+                    const off = 1 + (b.glitch % 3);
+                    ctx.fillStyle = `rgba(255,59,48,${(b.a * 2).toFixed(3)})`;
+                    ctx.fillText(c, b.x - off, b.y);
+                    ctx.fillStyle = `rgba(34,211,238,${(b.a * 1.8).toFixed(3)})`;
+                    ctx.fillText(c, b.x + off, b.y + 0.5);
+                    ctx.fillStyle = `rgba(${rgb},${Math.min(0.5, b.a * 2.4).toFixed(3)})`;
+                    ctx.fillText(c, b.x, b.y);
+                } else {
+                    ctx.fillStyle = `rgba(${rgb},${b.a.toFixed(3)})`;
+                    ctx.fillText(b.ch, b.x, b.y);
+                }
+            }
 
-            sparks.forEach((s) => {
-                ctx.fillStyle = s.red ? `rgba(255,59,48,${Math.min(0.9, s.life / 24)})` : `rgba(255,255,255,${Math.min(0.6, s.life / 30)})`;
-                ctx.fillRect(Math.round(s.x), Math.round(s.y), 1.5, 1.5);
-            });
-
-            ctx.font = '9px ui-monospace, SFMono-Regular, Menlo, monospace';
-            tags.forEach((t) => {
-                ctx.fillStyle = `rgba(255,255,255,${Math.min(0.45, t.life / 90)})`;
-                ctx.fillText(t.text, t.x - ctx.measureText(t.text).width / 2, t.y);
-            });
+            ctx.font = mono(9);
+            for (const l of labels) {
+                ctx.fillStyle = l.side === 1 ? `rgba(255,59,48,${Math.min(0.45, l.life / 60)})` : `rgba(255,255,255,${Math.min(0.35, l.life / 60)})`;
+                ctx.fillText(l.text, l.x, l.y);
+            }
         };
 
-        const loop = (now: number) => {
+        const loop = (t: number) => {
             raf = requestAnimationFrame(loop);
-            if (document.hidden || now - last < 33) return;
-            last = now;
+            if (document.hidden || t - last < 33) return;
+            last = t;
+            now = t;
+            if (t - lastTick >= TICK_MS) {
+                lastTick = t;
+                tick();
+            }
             step();
             draw();
         };
 
-        resize();
-        window.addEventListener('resize', resize);
-        if (reduced) draw();
-        else raf = requestAnimationFrame(loop);
+        reset();
+        window.addEventListener('resize', reset);
+        if (reduced) {
+            // A still frame with some history in it.
+            now = performance.now();
+            for (let i = 0; i < 120; i++) tick();
+            draw();
+        } else raf = requestAnimationFrame(loop);
 
         return () => {
             cancelAnimationFrame(raf);
-            window.removeEventListener('resize', resize);
+            window.removeEventListener('resize', reset);
         };
     }, []);
 
