@@ -3,6 +3,8 @@
 namespace Database\Seeders;
 
 use App\Models\Decision;
+use App\Models\Flow;
+use App\Models\StackItem;
 use App\Models\StackLayer;
 use App\Models\System;
 use Illuminate\Database\Seeder;
@@ -14,6 +16,7 @@ class PortfolioSeeder extends Seeder
         $this->seedStack();
         $this->seedSystems();
         $this->seedDecisions();
+        $this->seedFlows();
     }
 
     private function seedStack(): void
@@ -129,6 +132,21 @@ class PortfolioSeeder extends Seeder
 
         foreach ($systems as $i => $system) {
             System::updateOrCreate(['slug' => $system['slug']], $system + ['position' => $i + 1, 'visible' => true]);
+        }
+    }
+
+    private function seedFlows(): void
+    {
+        $known = StackItem::query()->pluck('name')->all();
+
+        foreach (require database_path('seeders/data/flows.php') as $i => $flow) {
+            foreach ($flow['steps'] as $step) {
+                if (! in_array($step['tool'], $known, true)) {
+                    throw new \RuntimeException("Flow {$flow['slug']} points at an unknown tool: {$step['tool']}");
+                }
+            }
+
+            Flow::updateOrCreate(['slug' => $flow['slug']], $flow + ['position' => $i + 1, 'visible' => true]);
         }
     }
 

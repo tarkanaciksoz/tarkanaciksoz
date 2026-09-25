@@ -97,3 +97,7 @@ export type StackResponse = {
     data: StackLayer[];
     meta: { layers: number; items: number; counted: number; cache: 'hit' | 'miss'; ttl_seconds: number };
 };
+
+export type FlowStep = { item_id: number | null; tool: string; note: string; hot: boolean };
+
+export type Flow = { slug: string; title: string; summary: string; steps: FlowStep[] };

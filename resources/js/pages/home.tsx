@@ -1,5 +1,5 @@
+import { CircuitBoard } from '@/components/circuit/circuit-board';
 import { Anatomy } from '@/components/portfolio/anatomy';
-import { PeriodicStack } from '@/components/portfolio/periodic-stack';
 import { Ambient } from '@/components/signal/ambient';
 import { DecodeText } from '@/components/signal/decode-text';
 import { GlitchBurst } from '@/components/signal/glitch-burst';
@@ -8,7 +8,7 @@ import { TearDivider } from '@/components/signal/tear-divider';
 import { Terminal } from '@/components/terminal/terminal';
 import { apiGet } from '@/lib/api';
 import { enableSmoothAnchors } from '@/lib/smooth-scroll';
-import type { Decision, Profile, StackResponse, System } from '@/types/portfolio';
+import type { Decision, Flow, Profile, StackResponse, System } from '@/types/portfolio';
 import { Head } from '@inertiajs/react';
 import { useEffect, useState } from 'react';
 
@@ -34,6 +34,7 @@ export default function Home() {
     const [signal, setSignal] = useState<{ raw: string; cache: string | null; serverMs: number | null }>({ raw: '', cache: null, serverMs: null });
     const systems = useApi<System[]>('/api/systems');
     const decisions = useApi<Decision[]>('/api/decisions');
+    const flows = useApi<Flow[]>('/api/flows');
 
     useEffect(() => {
         apiGet<StackResponse>('/api/stack')
@@ -127,19 +128,23 @@ export default function Home() {
                             every={[8, 16]}
                             className="max-w-[24ch] text-3xl leading-[1.02] font-medium tracking-[-0.03em] text-balance sm:text-5xl"
                         >
-                            <DecodeText text="What I work with, and why each piece is there" duration={900} />
+                            <DecodeText text="What I work with, and what it does when something happens" duration={900} />
                         </GlitchBurst>
                         <div className="mt-8">
-                            {stack ? (
+                            {stack && flows.data ? (
                                 <>
-                                    <PeriodicStack layers={stack.data} />
+                                    <CircuitBoard layers={stack.data} flows={flows.data ?? []} />
                                     <div className="mt-6 flex flex-wrap items-center justify-between gap-4 rounded-sm border border-white/15 bg-[#050506] px-4 py-3">
                                         <p className="font-mono text-[12.5px] text-zinc-400">
-                                            This map is not markup. It is{' '}
+                                            This board is not markup. It is{' '}
                                             <a href="/docs/api" className="jitter text-zinc-100 underline decoration-white/25 underline-offset-4">
                                                 GET /api/stack
+                                            </a>{' '}
+                                            and{' '}
+                                            <a href="/docs/api" className="jitter text-zinc-100 underline decoration-white/25 underline-offset-4">
+                                                GET /api/flows
                                             </a>
-                                            , {stack.meta.items} rows across {stack.meta.layers} layers.
+                                            : {stack.meta.items} tools, {flows.data.length} scenarios.
                                         </p>
                                         <a
                                             href="#made"
