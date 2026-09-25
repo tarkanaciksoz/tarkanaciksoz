@@ -1,3 +1,5 @@
+import { useId } from 'react';
+
 type Props = { kind: string; active?: boolean; className?: string };
 
 /**
@@ -5,17 +7,20 @@ type Props = { kind: string; active?: boolean; className?: string };
  * things rather than seven copies of the same slab.
  */
 export function Glyph({ kind, active = false, className = '' }: Props) {
-    const stroke = active ? 'rgba(255,255,255,.62)' : 'rgba(255,255,255,.26)';
-    const faint = active ? 'rgba(255,255,255,.26)' : 'rgba(255,255,255,.14)';
-    const fill = active ? '#1f2027' : '#131418';
-    const side = active ? '#101115' : '#0b0b0e';
+    const id = useId().replace(/:/g, '');
+    const stroke = active ? '#fff' : 'rgba(255,255,255,.38)';
+    const faint = active ? 'rgba(255,255,255,.4)' : 'rgba(255,255,255,.16)';
+    const fill = '#0c0c0e';
+    const side = '#060607';
+    const dither = `url(#d${id})`;
 
     const slab = (pattern: React.ReactNode) => (
         <>
             <polygon points="60,54 96,68 60,82 24,68" fill="#000" opacity=".55" />
             <polygon points="24,44 60,58 60,64 24,50" fill={side} stroke={faint} />
             <polygon points="60,58 96,44 96,50 60,64" fill={side} stroke={faint} />
-            <polygon points="60,30 96,44 60,58 24,44" fill={fill} stroke={stroke} />
+            <polygon points="60,30 96,44 60,58 24,44" fill={fill} />
+            <polygon points="60,30 96,44 60,58 24,44" fill={dither} stroke={stroke} />
             {pattern}
         </>
     );
@@ -24,6 +29,12 @@ export function Glyph({ kind, active = false, className = '' }: Props) {
 
     return (
         <svg viewBox="0 0 120 92" className={className} aria-hidden="true">
+            <defs>
+                <pattern id={`d${id}`} width={active ? 3 : 4} height={active ? 3 : 4} patternUnits="userSpaceOnUse">
+                    <rect x="0" y="0" width="1" height="1" fill={active ? 'rgba(255,255,255,.65)' : 'rgba(255,255,255,.25)'} />
+                    <rect x={active ? 1 : 2} y="2" width="1" height="1" fill={active ? 'rgba(255,255,255,.35)' : 'rgba(255,255,255,.12)'} />
+                </pattern>
+            </defs>
             {kind === 'devices' && (
                 <>
                     <rect x="34" y="28" width="26" height="44" rx="5" fill={fill} stroke={stroke} />
@@ -79,7 +90,9 @@ export function Glyph({ kind, active = false, className = '' }: Props) {
                     <path d="M 30 40 L 30 62 A 30 10 0 0 0 90 62 L 90 40 Z" fill={side} stroke={stroke} />
                     <path d="M 30 47 A 30 10 0 0 0 90 47" fill="none" stroke={faint} />
                     <path d="M 30 55 A 30 10 0 0 0 90 55" fill="none" stroke={faint} />
-                    <ellipse cx="60" cy="40" rx="30" ry="10" fill={fill} stroke={stroke} />
+                    <path d="M 30 40 L 30 62 A 30 10 0 0 0 90 62 L 90 40 Z" fill={dither} opacity=".6" />
+                    <ellipse cx="60" cy="40" rx="30" ry="10" fill={fill} />
+                    <ellipse cx="60" cy="40" rx="30" ry="10" fill={dither} stroke={stroke} />
                 </>
             )}
             {kind === 'radar' && (

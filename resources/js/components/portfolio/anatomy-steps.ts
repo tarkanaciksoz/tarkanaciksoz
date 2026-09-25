@@ -131,8 +131,6 @@ export function buildSteps(trace: Trace, client: ClientTiming | null): Step[] {
         byParent.set(span.parent_id, list);
     });
 
-    const slowest = trace.spans.reduce<Span | null>((max, s) => (!max || s.duration_ms > max.duration_ms ? s : max), null);
-
     const walk = (parentId: string | null, depth: number) => {
         (byParent.get(parentId) ?? []).forEach((span) => {
             const sql = typeof span.meta.sql === 'string' ? span.meta.sql : undefined;
@@ -155,7 +153,6 @@ export function buildSteps(trace: Trace, client: ClientTiming | null): Step[] {
                 sql,
                 explain: (span.meta.explain as Record<string, unknown>[] | null) ?? null,
                 depth,
-                slow: slowest?.id === span.id && span.duration_ms > 1,
             });
 
             walk(span.id, depth + 1);
@@ -190,6 +187,12 @@ export function buildSteps(trace: Trace, client: ClientTiming | null): Step[] {
             depth: 0,
         });
     }
+
+    // The slowest thing the server did gets marked, whether it was a span or a phase:
+    // that is where the corruption shows on the tower.
+    const serverSteps = steps.filter((s) => s.kind === 'server');
+    const slowest = serverSteps.reduce<Step | null>((max, s) => (!max || s.ms > max.ms ? s : max), null);
+    if (slowest && slowest.ms > 0.5) slowest.slow = true;
 
     return steps;
 }

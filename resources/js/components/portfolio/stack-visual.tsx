@@ -71,10 +71,22 @@ function Pattern({ kind, cy, lit }: { kind: 'grille' | 'code' | 'fork'; cy: numb
     );
 }
 
-function Slab({ cy, lit, children }: { cy: number; lit: boolean; children?: React.ReactNode }) {
+function Slab({ cy, lit, corrupt = false, children }: { cy: number; lit: boolean; corrupt?: boolean; children?: React.ReactNode }) {
+    const top = pts([
+        [CX, cy - H],
+        [CX + W, cy],
+        [CX, cy + H],
+        [CX - W, cy],
+    ]);
+    const rim = pts([
+        [CX - W, cy],
+        [CX, cy - H],
+        [CX + W, cy],
+    ]);
+
     return (
         <>
-            <ellipse cx={CX} cy={cy + H + T + 14} rx={W * 0.82} ry={H * 0.28} fill="#000" opacity=".6" filter="url(#gbBlur)" />
+            <ellipse cx={CX} cy={cy + H + T + 14} rx={W * 0.82} ry={H * 0.28} fill="#000" opacity=".7" filter="url(#gbBlur)" />
             <polygon
                 points={pts([
                     [CX - W, cy],
@@ -82,8 +94,8 @@ function Slab({ cy, lit, children }: { cy: number; lit: boolean; children?: Reac
                     [CX, cy + H + T],
                     [CX - W, cy + T],
                 ])}
-                fill="url(#gbSideL)"
-                stroke="rgba(255,255,255,.07)"
+                fill="#050506"
+                stroke="rgba(255,255,255,.1)"
             />
             <polygon
                 points={pts([
@@ -92,34 +104,40 @@ function Slab({ cy, lit, children }: { cy: number; lit: boolean; children?: Reac
                     [CX + W, cy + T],
                     [CX, cy + H + T],
                 ])}
-                fill="url(#gbSideR)"
-                stroke="rgba(255,255,255,.09)"
+                fill="#0b0b0d"
+                stroke="rgba(255,255,255,.14)"
             />
             <polygon
                 points={pts([
-                    [CX, cy - H],
-                    [CX + W, cy],
                     [CX, cy + H],
-                    [CX - W, cy],
-                ])}
-                fill={lit ? 'url(#gbTopOn)' : 'url(#gbTop)'}
-                stroke={lit ? 'rgba(255,255,255,.55)' : 'rgba(255,255,255,.16)'}
-            />
-            <polyline
-                points={pts([
-                    [CX - W, cy],
-                    [CX, cy - H],
                     [CX + W, cy],
+                    [CX + W, cy + T],
+                    [CX, cy + H + T],
                 ])}
-                fill="none"
-                stroke={lit ? 'rgba(255,255,255,.6)' : 'rgba(255,255,255,.22)'}
+                fill="url(#gbDitherSparse)"
             />
+            <polygon points={top} fill="#0c0c0e" />
+            <polygon
+                points={top}
+                fill={lit ? 'url(#gbDitherDense)' : 'url(#gbDitherSparse)'}
+                stroke={lit ? '#fff' : 'rgba(255,255,255,.3)'}
+                strokeWidth={lit ? 1.2 : 1}
+            />
+            <polyline points={rim} fill="none" stroke={lit ? '#fff' : 'rgba(255,255,255,.4)'} />
+            {corrupt && lit && (
+                <g className="tear" style={{ mixBlendMode: 'screen' }}>
+                    <polygon points={top} fill="none" stroke="#ff3b30" strokeWidth="1.4" transform="translate(-4 1)" opacity=".9" />
+                    <polygon points={top} fill="none" stroke="#22d3ee" strokeWidth="1.4" transform="translate(4 -1)" opacity=".9" />
+                    <rect x={CX - W} y={cy - 6} width={W * 2} height="3" fill="#fff" opacity=".55" />
+                    <rect x={CX - W * 0.6} y={cy + 14} width={W * 1.1} height="2" fill="#ff3b30" opacity=".7" />
+                </g>
+            )}
             {children}
         </>
     );
 }
 
-function Shape({ layer, lit }: { layer: VisualLayer; lit: boolean }) {
+function Shape({ layer, lit, corrupt }: { layer: VisualLayer; lit: boolean; corrupt: boolean }) {
     const cy = Y[layer.id];
 
     if (layer.shape === 'device') {
@@ -196,7 +214,7 @@ function Shape({ layer, lit }: { layer: VisualLayer; lit: boolean }) {
     }
 
     return (
-        <Slab cy={cy} lit={lit}>
+        <Slab cy={cy} lit={lit} corrupt={corrupt}>
             <Pattern kind={layer.pattern ?? 'code'} cy={cy} lit={lit} />
         </Slab>
     );
@@ -211,9 +229,11 @@ type Props = {
     flying: boolean;
     onPick: (id: LayerId) => void;
     format: (n: number) => string;
+    /** The active step is the slowest one or had to do real work: show it. */
+    corrupt?: boolean;
 };
 
-export function StackVisual({ className = 'w-full', active, seen, totals, orbY, flying, onPick, format }: Props) {
+export function StackVisual({ className = 'w-full', active, seen, totals, orbY, flying, onPick, format, corrupt = false }: Props) {
     const deepest = Math.max(Y.browser, ...[...seen].map((id) => Y[id]));
 
     return (
@@ -251,11 +271,23 @@ export function StackVisual({ className = 'w-full', active, seen, totals, orbY, 
                     <stop offset=".55" stopColor="#fff" stopOpacity=".2" />
                     <stop offset="1" stopColor="#fff" stopOpacity="0" />
                 </radialGradient>
+                <pattern id="gbDitherSparse" width="4" height="4" patternUnits="userSpaceOnUse">
+                    <rect x="0" y="0" width="1" height="1" fill="rgba(255,255,255,.22)" />
+                    <rect x="2" y="2" width="1" height="1" fill="rgba(255,255,255,.12)" />
+                </pattern>
+                <pattern id="gbDitherDense" width="3" height="3" patternUnits="userSpaceOnUse">
+                    <rect x="0" y="0" width="1" height="1" fill="rgba(255,255,255,.6)" />
+                    <rect x="1" y="2" width="1" height="1" fill="rgba(255,255,255,.35)" />
+                    <rect x="2" y="1" width="1" height="1" fill="rgba(255,255,255,.2)" />
+                </pattern>
                 <filter id="gbBlur" x="-50%" y="-50%" width="200%" height="200%">
                     <feGaussianBlur stdDeviation="6" />
                 </filter>
             </defs>
 
+            <line x1={CX - W} y1={Y.edge} x2={CX - W} y2={Y.cache + T} stroke="rgba(255,255,255,.12)" strokeDasharray="2 4" />
+            <line x1={CX + W} y1={Y.edge} x2={CX + W} y2={Y.cache + T} stroke="rgba(255,255,255,.12)" strokeDasharray="2 4" />
+            <line x1={CX} y1={Y.edge + H} x2={CX} y2={Y.cache + H + T} stroke="rgba(255,255,255,.08)" strokeDasharray="2 4" />
             <line x1={CX} y1={Y.browser} x2={CX} y2={Y.db} stroke="rgba(255,255,255,.08)" />
             <line x1={CX} y1={Y.browser} x2={CX} y2={deepest} stroke="rgba(255,255,255,.4)" />
 
@@ -281,7 +313,7 @@ export function StackVisual({ className = 'w-full', active, seen, totals, orbY, 
                         className="cursor-pointer outline-none"
                         opacity={visited ? 1 : 0.42}
                     >
-                        <Shape layer={layer} lit={lit} />
+                        <Shape layer={layer} lit={lit} corrupt={corrupt} />
                         {lit && layer.shape !== 'node' && layer.shape !== 'device' && (
                             <ellipse
                                 cx={CX}
@@ -293,6 +325,15 @@ export function StackVisual({ className = 'w-full', active, seen, totals, orbY, 
                             />
                         )}
                         <text x="300" y={cy - 3} style={{ fill: lit ? '#f4f4f5' : '#a1a1aa', fontSize: 14, fontWeight: 500 }}>
+                            <tspan
+                                style={{
+                                    fill: lit ? '#ff3b30' : '#52525b',
+                                    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                                    fontSize: 10.5,
+                                }}
+                            >
+                                {`0x${(VISUAL_LAYERS.indexOf(layer) * 16).toString(16).toUpperCase().padStart(2, '0')} `}
+                            </tspan>
                             {layer.name}
                         </text>
                         <text

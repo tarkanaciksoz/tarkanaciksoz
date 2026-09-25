@@ -2,6 +2,8 @@ import type { ClientTiming, Trace } from '@/types/portfolio';
 
 export type ApiResult<T> = {
     body: T;
+    /** The exact bytes that came back, before parsing. */
+    raw: string;
     traceId: string | null;
     cache: string | null;
     status: number;
@@ -34,11 +36,13 @@ function readTiming(url: string, fallbackMs: number): ClientTiming | null {
 export async function apiGet<T>(path: string): Promise<ApiResult<T>> {
     const started = performance.now();
     const response = await fetch(path, { headers: { Accept: 'application/json' } });
-    const body = (await response.json()) as T;
+    const raw = await response.text();
+    const body = JSON.parse(raw) as T;
     const elapsed = performance.now() - started;
 
     return {
         body,
+        raw,
         status: response.status,
         traceId: response.headers.get('X-Trace-Id'),
         cache: response.headers.get('Cache-Status'),

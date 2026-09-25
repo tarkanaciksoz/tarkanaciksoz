@@ -156,3 +156,117 @@
         @apply bg-background text-foreground;
     }
 }
+
+/* ---------------------------------------------------------------------------
+   Signal integrity: the page behaves like a byte stream that decodes in front
+   of you. Corruption is never decoration — it marks a cache miss, the slowest
+   step, or time no span claimed.
+   --------------------------------------------------------------------------- */
+
+@layer utilities {
+    /* 1-bit ordered dither, used instead of smooth gradients */
+    .dither {
+        background-image:
+            radial-gradient(circle at 25% 25%, rgba(255, 255, 255, 0.5) 0.5px, transparent 0.6px),
+            radial-gradient(circle at 75% 75%, rgba(255, 255, 255, 0.5) 0.5px, transparent 0.6px);
+        background-size: 4px 4px;
+    }
+
+    .scanlines::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        background: repeating-linear-gradient(to bottom, rgba(255, 255, 255, 0.035) 0 1px, transparent 1px 3px);
+    }
+
+    .grain::before {
+        content: '';
+        position: fixed;
+        inset: -50%;
+        z-index: 0;
+        pointer-events: none;
+        opacity: 0.035;
+        background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2'/></filter><rect width='160' height='160' filter='url(%23n)'/></svg>");
+        animation: grain-drift 6s steps(6) infinite;
+    }
+
+    /* Chromatic split: the same text, offset in red and cyan, as a signal that
+       something had to be recomputed rather than read back. */
+    .split {
+        position: relative;
+    }
+    .split::before,
+    .split::after {
+        content: attr(data-text);
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        clip-path: inset(0);
+    }
+    .split::before {
+        color: #ff3b30;
+        animation: split-left 2.4s steps(2) infinite;
+    }
+    .split::after {
+        color: #22d3ee;
+        animation: split-right 2.4s steps(2) infinite;
+    }
+
+    .tear {
+        animation: tear 3.6s steps(1) infinite;
+    }
+
+    .flicker {
+        animation: flicker 4s steps(1) infinite;
+    }
+}
+
+@keyframes grain-drift {
+    0% { transform: translate(0, 0); }
+    25% { transform: translate(-3%, 2%); }
+    50% { transform: translate(2%, -3%); }
+    75% { transform: translate(-2%, -2%); }
+    100% { transform: translate(0, 0); }
+}
+
+@keyframes split-left {
+    0%, 92%, 100% { transform: translate(0, 0); opacity: 0; }
+    93% { transform: translate(-2px, 1px); opacity: 0.85; }
+    96% { transform: translate(1px, -1px); opacity: 0.6; }
+}
+
+@keyframes split-right {
+    0%, 92%, 100% { transform: translate(0, 0); opacity: 0; }
+    94% { transform: translate(2px, -1px); opacity: 0.85; }
+    97% { transform: translate(-1px, 1px); opacity: 0.6; }
+}
+
+@keyframes tear {
+    0%, 88%, 100% { clip-path: inset(0 0 0 0); transform: translateX(0); }
+    89% { clip-path: inset(22% 0 62% 0); transform: translateX(6px); }
+    90% { clip-path: inset(0 0 0 0); transform: translateX(0); }
+    93% { clip-path: inset(66% 0 18% 0); transform: translateX(-5px); }
+    94% { clip-path: inset(0 0 0 0); transform: translateX(0); }
+}
+
+@keyframes flicker {
+    0%, 96%, 100% { opacity: 1; }
+    97% { opacity: 0.35; }
+    98% { opacity: 1; }
+    99% { opacity: 0.6; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .split::before,
+    .split::after,
+    .tear,
+    .flicker,
+    .grain::before {
+        animation: none;
+    }
+    .split::before,
+    .split::after {
+        opacity: 0;
+    }
+}

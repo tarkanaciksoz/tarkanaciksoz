@@ -1,6 +1,9 @@
 import { apiGet, fetchTrace, ms, postClientTiming } from '@/lib/api';
 import type { ClientTiming, StackResponse, Trace } from '@/types/portfolio';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { DigitRoll } from '../signal/digit-roll';
+import { crc32, HexDump } from '../signal/hex-dump';
+import { NoiseField } from '../signal/noise-field';
 import { buildSteps, LAYERS, type LayerId, type Step } from './anatomy-steps';
 import { layerY, StackVisual } from './stack-visual';
 
@@ -23,7 +26,7 @@ function Bar({ steps, activeKey, onPick }: { steps: Step[]; activeKey: string; o
                     className={`min-w-[2px] rounded-sm transition-colors ${
                         step.key === activeKey
                             ? step.slow
-                                ? 'bg-orange-400'
+                                ? 'bg-[#ff3b30]'
                                 : 'bg-white'
                             : step.kind === 'gap'
                               ? 'bg-white/10'
@@ -46,7 +49,7 @@ function Code({ step }: { step: Step }) {
                     {src.vendor ? (
                         <span className="rounded border border-white/12 px-1.5 py-0.5 text-[10px] text-zinc-400">vendor</span>
                     ) : (
-                        src.commit && <span className="rounded border border-sky-300/30 px-1.5 py-0.5 text-[10px] text-sky-300">{src.commit}</span>
+                        src.commit && <span className="rounded-sm border border-white/25 px-1.5 py-0.5 text-[10px] text-zinc-200">{src.commit}</span>
                     )}
                 </span>
             </div>
@@ -56,9 +59,9 @@ function Code({ step }: { step: Step }) {
                     return (
                         <div
                             key={line.n}
-                            className={`grid grid-cols-[42px_minmax(0,1fr)] ${hit ? 'bg-sky-400/8 shadow-[inset_2px_0_0_theme(colors.sky.400)]' : ''}`}
+                            className={`grid grid-cols-[42px_minmax(0,1fr)] ${hit ? 'bg-[#ff3b30]/10 shadow-[inset_2px_0_0_#ff3b30]' : ''}`}
                         >
-                            <span className={`pr-3 text-right select-none ${hit ? 'text-sky-300' : 'text-zinc-600'}`}>{line.n}</span>
+                            <span className={`pr-3 text-right select-none ${hit ? 'text-[#ff3b30]' : 'text-zinc-600'}`}>{line.n}</span>
                             <span className={`whitespace-pre ${hit ? 'text-zinc-100' : 'text-zinc-400'}`}>{line.text || ' '}</span>
                         </div>
                     );
@@ -77,6 +80,7 @@ export function Anatomy() {
     const [client, setClient] = useState<ClientTiming | null>(null);
     const [cache, setCache] = useState<string | null>(null);
     const [rows, setRows] = useState<number | null>(null);
+    const [raw, setRaw] = useState<string>('');
     const [activeKey, setActiveKey] = useState<string>('');
     const [playing, setPlaying] = useState(false);
     const [elapsed, setElapsed] = useState<number | null>(null);
@@ -88,6 +92,9 @@ export function Anatomy() {
     const steps = useMemo(() => (trace ? buildSteps(trace, client) : []), [trace, client]);
     const active = steps.find((s) => s.key === activeKey) ?? steps[0];
     const total = useMemo(() => steps.reduce((n, s) => n + s.ms, 0), [steps]);
+    const corrupt = !!active && (active.slow || (cache === 'miss' && (active.layer === 'db' || active.layer === 'cache')));
+    const unattributedShare = trace ? Math.min(0.9, trace.unattributed_ms / Math.max(trace.duration_ms, 0.001)) : 0;
+    const checksum = useMemo(() => (raw ? crc32(raw) : null), [raw]);
 
     /** Runs the recorded request back at a walking pace, in its real proportions. */
     const play = useCallback((list: Step[], speed: 'slow' | 'real') => {
@@ -148,6 +155,7 @@ export function Anatomy() {
             const result = await apiGet<StackResponse>('/api/stack');
             setCache(result.cache);
             setRows(result.body.meta.items);
+            setRaw(result.raw);
             setClient(result.timing);
 
             if (!result.traceId) throw new Error('no trace id');
@@ -259,7 +267,7 @@ export function Anatomy() {
             </div>
 
             {status === 'error' && (
-                <p className="mt-4 rounded-lg border border-orange-400/30 bg-orange-400/5 px-4 py-3 text-sm text-orange-200">
+                <p className="mt-4 rounded-lg border border-orange-400/30 bg-[#ff3b30]/5 px-4 py-3 text-sm text-orange-200">
                     The request did not come back with a trace. Tracing may be disabled, or the record expired before it could be read.
                 </p>
             )}
@@ -274,9 +282,23 @@ export function Anatomy() {
             {trace && active && (
                 <div className="mt-6 grid gap-8 lg:grid-cols-[minmax(0,460px)_minmax(0,1fr)] lg:items-start lg:gap-16">
                     <div className="top-16 hidden max-h-[calc(100vh-5rem)] lg:sticky lg:block">
-                        <div className="flex items-baseline gap-2">
-                            <span className="font-mono text-4xl font-medium text-zinc-50 tabular-nums">{ms(elapsed ?? total)}</span>
-                            <span className="font-mono text-sm text-zinc-500">ms{playing ? ' · playing' : ' · end to end'}</span>
+                        <div className="flex items-baseline justify-between gap-3">
+                            <div className="flex items-baseline gap-2">
+                                <span
+                                    className={`font-mono text-5xl font-medium tracking-tight text-zinc-50 tabular-nums ${corrupt ? 'split' : ''}`}
+                                    data-text={ms(elapsed ?? total)}
+                                >
+                                    {ms(elapsed ?? total)}
+                                </span>
+                                <span className="font-mono text-sm text-zinc-500">ms{playing ? ' · replaying' : ' · end to end'}</span>
+                            </div>
+                            <span
+                                className={`rounded-sm px-1.5 py-0.5 font-mono text-[10.5px] tracking-[0.14em] uppercase ${
+                                    cache === 'miss' ? 'bg-[#ff3b30] text-black' : 'border border-white/20 text-zinc-300'
+                                }`}
+                            >
+                                cache {cache ?? '—'}
+                            </span>
                         </div>
                         <StackVisual
                             className="mx-auto max-h-[56vh] w-full"
@@ -287,11 +309,12 @@ export function Anatomy() {
                             flying={playing}
                             onPick={jumpToLayer}
                             format={ms}
+                            corrupt={corrupt}
                         />
                         <div className="mt-2 min-h-[72px] rounded-lg border border-white/8 bg-white/[0.02] px-4 py-3">
                             <div className="flex items-baseline justify-between gap-3">
                                 <span className="truncate text-[15px] font-medium text-zinc-50">{active.title}</span>
-                                <span className={`shrink-0 font-mono text-[13px] ${active.slow ? 'text-orange-400' : 'text-zinc-300'}`}>
+                                <span className={`shrink-0 font-mono text-[13px] ${active.slow ? 'text-[#ff3b30]' : 'text-zinc-300'}`}>
                                     {ms(active.ms)} ms
                                 </span>
                             </div>
@@ -309,6 +332,17 @@ export function Anatomy() {
                                 {rows !== null && <> · {rows} rows returned</>}
                             </div>
                         </div>
+                        {raw && (
+                            <div className="scanlines relative mt-4 overflow-hidden rounded-md border border-white/10 bg-[#050506] p-3">
+                                <div className="mb-2 flex items-baseline justify-between gap-3 font-mono text-[10.5px] tracking-[0.12em] text-zinc-500 uppercase">
+                                    <span>response body · {new TextEncoder().encode(raw).length.toLocaleString()} bytes</span>
+                                    <span>
+                                        crc32 <span className="text-zinc-200">{checksum}</span>
+                                    </span>
+                                </div>
+                                <HexDump source={raw} rows={5} hot={corrupt ? [18, 34] : null} />
+                            </div>
+                        )}
                     </div>
 
                     <div className="sticky top-14 z-20 -mx-4 border-b border-white/8 bg-black/90 px-4 pt-3 pb-3 backdrop-blur lg:hidden">
@@ -316,7 +350,7 @@ export function Anatomy() {
                             <span className="font-mono text-2xl font-medium text-zinc-50 tabular-nums">
                                 {ms(elapsed ?? total)} <span className="text-sm text-zinc-500">ms{playing ? ' · playing' : ''}</span>
                             </span>
-                            <span className={`shrink-0 font-mono text-[12px] ${active.slow ? 'text-orange-400' : 'text-zinc-400'}`}>
+                            <span className={`shrink-0 font-mono text-[12px] ${active.slow ? 'text-[#ff3b30]' : 'text-zinc-400'}`}>
                                 {ms(active.ms)} ms
                             </span>
                         </div>
@@ -329,6 +363,7 @@ export function Anatomy() {
                             flying={playing}
                             onPick={jumpToLayer}
                             format={ms}
+                            corrupt={corrupt}
                         />
                         <div className="mb-2 truncate text-[14px] font-medium text-zinc-100">{active.title}</div>
                         <Bar steps={steps} activeKey={active.key} onPick={setActiveKey} />
@@ -346,13 +381,15 @@ export function Anatomy() {
                                 }`}
                             >
                                 <div className="flex flex-wrap items-baseline gap-2 font-mono text-[11px] tracking-[0.12em] uppercase">
-                                    <span className="text-sky-300">{String(i + 1).padStart(2, '0')}</span>
+                                    <span className="text-[#ff3b30]">{`0x${(i * 16).toString(16).toUpperCase().padStart(3, '0')}`}</span>
                                     <span className="text-zinc-500">{LAYERS.find((l) => l.id === step.layer)?.name}</span>
                                     {step.depth > 0 && <span className="text-zinc-600">nested</span>}
                                 </div>
                                 <h3 className="mt-3 flex flex-wrap items-baseline gap-3 text-xl leading-tight font-medium text-zinc-50 sm:text-2xl">
                                     {step.title}
-                                    <span className={`font-mono text-sm ${step.slow ? 'text-orange-400' : 'text-zinc-400'}`}>{ms(step.ms)} ms</span>
+                                    <span className={`font-mono text-sm ${step.slow ? 'text-[#ff3b30]' : 'text-zinc-400'}`}>
+                                        <DigitRoll value={step.ms} format={ms} /> ms{step.slow && ' · slowest'}
+                                    </span>
                                 </h3>
                                 <p className="mt-3 text-zinc-200">{step.detail}</p>
 
@@ -394,9 +431,18 @@ export function Anatomy() {
                                     </div>
                                 )}
 
+                                {step.kind === 'gap' && (
+                                    <div className="relative mt-4 h-16 overflow-hidden rounded-md border border-white/10 bg-black">
+                                        <NoiseField className="absolute inset-0 h-full w-full" density={0.08 + unattributedShare * 0.5} />
+                                        <span className="absolute bottom-1.5 left-2 font-mono text-[10.5px] tracking-[0.12em] text-zinc-400 uppercase">
+                                            {Math.round(unattributedShare * 100)}% of server time · no span claimed it
+                                        </span>
+                                    </div>
+                                )}
+
                                 {step.why && (
                                     <div className="mt-5 border-l-2 border-white/20 py-1 pl-4">
-                                        <div className="font-mono text-[10.5px] tracking-[0.14em] text-sky-300 uppercase">Why</div>
+                                        <div className="font-mono text-[10.5px] tracking-[0.14em] text-[#ff3b30] uppercase">Why</div>
                                         <p className="mt-1.5 text-[15px] text-zinc-400">{step.why}</p>
                                     </div>
                                 )}

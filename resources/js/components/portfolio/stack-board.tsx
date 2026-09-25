@@ -1,5 +1,6 @@
 import type { StackItem, StackLayer } from '@/types/portfolio';
 import { useState } from 'react';
+import { DecodeText } from '../signal/decode-text';
 import { Glyph } from './glyph';
 
 type Selection = { layer: StackLayer; item: StackItem } | null;
@@ -35,10 +36,10 @@ export function StackBoard({ layers, rows }: { layers: StackLayer[]; rows: numbe
                                             type="button"
                                             aria-pressed={active}
                                             onClick={() => setSelected({ layer, item })}
-                                            className={`rounded-md border px-2 py-1 text-left text-[11.5px] leading-tight font-medium transition-colors ${
+                                            className={`rounded-sm border px-2 py-1 text-left text-[11.5px] leading-tight font-medium transition-colors ${
                                                 active
                                                     ? 'border-white bg-white text-black'
-                                                    : 'border-white/12 bg-white/[0.03] text-zinc-200 hover:border-white/25 hover:bg-white/[0.07]'
+                                                    : 'border-white/15 bg-transparent text-zinc-200 hover:border-[#ff3b30] hover:text-white'
                                             }`}
                                         >
                                             {item.name}
@@ -57,9 +58,13 @@ export function StackBoard({ layers, rows }: { layers: StackLayer[]; rows: numbe
             </div>
 
             {selected && (
-                <aside className="rounded-xl border border-white/8 bg-[#0a0a0b] p-5 lg:sticky lg:top-20">
-                    <div className="font-mono text-[10.5px] tracking-[0.14em] text-zinc-500 uppercase">Layer · {selected.layer.name}</div>
-                    <h3 className="mt-2 text-xl leading-tight font-medium text-zinc-50">{selected.item.name}</h3>
+                <aside className="scanlines relative overflow-hidden rounded-sm border border-white/15 bg-[#050506] p-5 lg:sticky lg:top-20">
+                    <div className="font-mono text-[10.5px] tracking-[0.14em] text-zinc-500 uppercase">
+                        <span className="text-[#ff3b30]">▌</span> Layer · {selected.layer.name}
+                    </div>
+                    <h3 key={selected.item.id} className="mt-2 text-2xl leading-tight font-medium tracking-[-0.02em] text-zinc-50">
+                        <DecodeText text={selected.item.name} duration={420} />
+                    </h3>
                     {selected.item.usage && <div className="mt-1 font-mono text-xs text-zinc-400">in {selected.item.usage}</div>}
                     <p className="mt-3 text-sm text-zinc-200">{selected.item.why}</p>
                     {selected.item.instead_of && (
