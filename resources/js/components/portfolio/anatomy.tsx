@@ -5,12 +5,13 @@ import { DigitRoll } from '../signal/digit-roll';
 import { crc32, HexDump } from '../signal/hex-dump';
 import { NoiseField } from '../signal/noise-field';
 import { buildSteps, LAYERS, type LayerId, type Step } from './anatomy-steps';
-import { layerY, StackVisual } from './stack-visual';
+import { BootLog, type LogLine } from './boot-log';
+import { ASSEMBLY_MS, DROP_STAGGER, dropOrder, layerY, StackVisual, VISUAL_LAYERS } from './stack-visual';
 
 /** Slow motion: the whole request stretched to about this many seconds. */
 const PLAYBACK_SECONDS = 6;
 
-type Status = 'idle' | 'sending' | 'ready' | 'error';
+type Status = 'waiting' | 'building' | 'sending' | 'ready' | 'error';
 
 function Bar({ steps, activeKey, onPick }: { steps: Step[]; activeKey: string; onPick: (key: string) => void }) {
     const total = steps.reduce((n, s) => n + s.ms, 0) || 1;
@@ -75,7 +76,7 @@ function Code({ step }: { step: Step }) {
 }
 
 export function Anatomy() {
-    const [status, setStatus] = useState<Status>('idle');
+    const [status, setStatus] = useState<Status>('waiting');
     const [trace, setTrace] = useState<Trace | null>(null);
     const [client, setClient] = useState<ClientTiming | null>(null);
     const [cache, setCache] = useState<string | null>(null);
@@ -85,16 +86,26 @@ export function Anatomy() {
     const [playing, setPlaying] = useState(false);
     const [elapsed, setElapsed] = useState<number | null>(null);
     const [orbY, setOrbY] = useState(() => layerY('browser'));
+    const [building, setBuilding] = useState(false);
+    const [log, setLog] = useState<LogLine[]>([]);
     const stepRefs = useRef<Record<string, HTMLElement | null>>({});
+    const rootRef = useRef<HTMLDivElement>(null);
     const frame = useRef<number>(0);
     const playhead = useRef(0);
+    const clock = useRef(0);
+    const running = useRef(false);
 
     const steps = useMemo(() => (trace ? buildSteps(trace, client) : []), [trace, client]);
-    const active = steps.find((s) => s.key === activeKey) ?? steps[0];
+    const active = steps.find((s) => s.key === activeKey) ?? steps[0] ?? null;
     const total = useMemo(() => steps.reduce((n, s) => n + s.ms, 0), [steps]);
-    const corrupt = !!active && (active.slow || (cache === 'miss' && (active.layer === 'db' || active.layer === 'cache')));
+    const corrupt = !!active && (!!active.slow || (cache === 'miss' && (active.layer === 'db' || active.layer === 'cache')));
     const unattributedShare = trace ? Math.min(0.9, trace.unattributed_ms / Math.max(trace.duration_ms, 0.001)) : 0;
     const checksum = useMemo(() => (raw ? crc32(raw) : null), [raw]);
+
+    const say = useCallback((text: string, tone: LogLine['tone'] = 'plain', tail?: string) => {
+        const t = (performance.now() - clock.current) / 1000;
+        setLog((lines) => [...lines, { t, text, tone, tail }]);
+    }, []);
 
     /** Runs the recorded request back at a walking pace, in its real proportions. */
     const play = useCallback((list: Step[], speed: 'slow' | 'real') => {
@@ -103,19 +114,19 @@ export function Anatomy() {
         if (!sum) return;
 
         const schedule: { step: Step; from: number; to: number; y: number; prevY: number }[] = [];
-        let clock = 0;
+        let at0 = 0;
         let prevY = layerY('browser');
         list.forEach((step) => {
             const y = layerY(step.layer);
-            schedule.push({ step, from: clock, to: clock + step.ms, y, prevY });
-            clock += step.ms;
+            schedule.push({ step, from: at0, to: at0 + step.ms, y, prevY });
+            at0 += step.ms;
             prevY = y;
         });
 
         const factor = speed === 'real' ? 1 : (PLAYBACK_SECONDS * 1000) / sum;
         const startedAt = performance.now();
         setPlaying(true);
-        playhead.current = 0;
+        playhead.current = -1;
 
         const tick = (now: number) => {
             const at = (now - startedAt) / factor;
@@ -134,8 +145,9 @@ export function Anatomy() {
 
             setElapsed(at);
             setOrbY(current.prevY + (current.y - current.prevY) * travel);
-            if (playhead.current !== schedule.indexOf(current)) {
-                playhead.current = schedule.indexOf(current);
+            const index = schedule.indexOf(current);
+            if (playhead.current !== index) {
+                playhead.current = index;
                 setActiveKey(current.step.key);
             }
 
@@ -145,32 +157,94 @@ export function Anatomy() {
         frame.current = requestAnimationFrame(tick);
     }, []);
 
-    const send = useCallback(async () => {
+    /** Build the tower, send the request, read its trace, replay it. Nothing waits for a click. */
+    const run = useCallback(async () => {
+        if (running.current) return;
+        running.current = true;
         cancelAnimationFrame(frame.current);
-        setStatus('sending');
-        setPlaying(false);
+
+        const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        clock.current = performance.now();
+        setLog([]);
+        setTrace(null);
         setElapsed(null);
+        setPlaying(false);
+        setStatus('building');
+        setBuilding(!reduced);
+
+        // Each layer reports in as it lands, bottom-up, in step with the drawing.
+        [...VISUAL_LAYERS]
+            .sort((a, b) => dropOrder(a.id) - dropOrder(b.id))
+            .forEach((layer) => {
+                window.setTimeout(
+                    () => say(`mount /${layer.id} `.padEnd(16, '.') + ` ${layer.name}`, 'ok', '[ ok ]'),
+                    reduced ? 0 : dropOrder(layer.id) * DROP_STAGGER + 420,
+                );
+            });
+
+        await new Promise((resolve) => window.setTimeout(resolve, reduced ? 20 : ASSEMBLY_MS + 120));
+        setBuilding(false);
 
         try {
+            setStatus('sending');
+            say('GET /api/stack', 'plain', 'sending');
             const result = await apiGet<StackResponse>('/api/stack');
             setCache(result.cache);
             setRows(result.body.meta.items);
             setRaw(result.raw);
             setClient(result.timing);
+            const bytes = new TextEncoder().encode(result.raw).length;
+            say(
+                `← ${result.status} · ${bytes.toLocaleString()} B · cache ${result.cache ?? '—'}`,
+                result.cache === 'miss' ? 'hot' : 'ok',
+                `crc32 ${crc32(result.raw)}`,
+            );
 
             if (!result.traceId) throw new Error('no trace id');
-            if (result.timing) await postClientTiming(result.traceId, result.timing);
+            say(`X-Trace-Id ${result.traceId}`, 'dim');
+
+            if (result.timing) {
+                await postClientTiming(result.traceId, result.timing);
+                say('POST /api/traces/{id}/client-timing', 'plain', `dns ${ms(result.timing.dns_ms)} · ttfb ${ms(result.timing.ttfb_ms)} ms`);
+            }
 
             const recorded = await fetchTrace(result.traceId);
             if (!recorded) throw new Error('trace not found');
+            const queries = recorded.spans.filter((s) => s.kind === 'query').length;
+            say(`GET /api/traces/{id} · ${recorded.spans.length} spans · ${queries} queries`, 'ok', `${recorded.duration_ms.toFixed(1)} ms`);
+
+            const list = buildSteps(recorded, result.timing);
+            const slow = list.find((s) => s.slow);
+            if (slow) say(`slowest · ${slow.title}`, 'hot', `${ms(slow.ms)} ms`);
+            say(`replay · ${list.length} steps · ${PLAYBACK_SECONDS} s`, 'dim');
 
             setTrace(recorded);
             setStatus('ready');
-            play(buildSteps(recorded, result.timing), 'slow');
+            play(list, 'slow');
         } catch {
+            say('request failed · no trace to read', 'hot');
             setStatus('error');
+        } finally {
+            running.current = false;
         }
-    }, [play]);
+    }, [play, say]);
+
+    // Start on its own the first time the section is on screen.
+    useEffect(() => {
+        const el = rootRef.current;
+        if (!el) return;
+        const io = new IntersectionObserver(
+            (entries) => {
+                if (entries.some((e) => e.isIntersecting)) {
+                    io.disconnect();
+                    run();
+                }
+            },
+            { threshold: 0.25 },
+        );
+        io.observe(el);
+        return () => io.disconnect();
+    }, [run]);
 
     useEffect(() => () => cancelAnimationFrame(frame.current), []);
 
@@ -178,12 +252,14 @@ export function Anatomy() {
         if (steps.length && !steps.some((s) => s.key === activeKey)) setActiveKey(steps[0].key);
     }, [steps, activeKey]);
 
-    /** Once the playback has finished, scrolling the steps drives the light instead. */
+    /** Once the replay has finished, scrolling the steps drives the light instead. */
     useEffect(() => {
         if (!steps.length || playing) return;
 
         const onScroll = () => {
             const mid = window.innerHeight * 0.45;
+            const first = stepRefs.current[steps[0].key];
+            if (!first || first.getBoundingClientRect().top > mid) return;
             let current = steps[0].key;
             for (const step of steps) {
                 const el = stepRefs.current[step.key];
@@ -207,8 +283,9 @@ export function Anatomy() {
     }, [steps]);
 
     const seen = useMemo(() => {
+        if (!active) return new Set<LayerId>(VISUAL_LAYERS.map((l) => l.id));
         const set = new Set<LayerId>();
-        const index = steps.findIndex((s) => s.key === active?.key);
+        const index = steps.findIndex((s) => s.key === active.key);
         steps.slice(0, index + 1).forEach((s) => set.add(s.layer));
         return set;
     }, [steps, active]);
@@ -221,35 +298,60 @@ export function Anatomy() {
         [steps],
     );
 
+    const busy = status === 'building' || status === 'sending' || playing;
+    const headline =
+        status === 'waiting'
+            ? 'waiting for the section to be seen'
+            : status === 'building'
+              ? 'assembling the stack'
+              : status === 'sending'
+                ? 'sending the request'
+                : null;
+
+    const tower = (className: string) => (
+        <StackVisual
+            className={className}
+            active={active?.layer ?? null}
+            building={building}
+            seen={seen}
+            totals={totals}
+            orbY={orbY}
+            flying={playing}
+            onPick={jumpToLayer}
+            format={ms}
+            corrupt={corrupt}
+        />
+    );
+
     return (
-        <div>
-            <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-white/10 bg-[#0a0a0b] px-4 py-3">
+        <div ref={rootRef}>
+            <div className="flex flex-wrap items-center justify-between gap-4 rounded-sm border border-white/12 bg-[#050506] px-4 py-3">
                 <div className="min-w-0 font-mono text-[12.5px] text-zinc-400">
-                    <span
-                        className={`mr-2 inline-block h-1.5 w-1.5 rounded-full align-middle ${playing ? 'animate-pulse bg-white shadow-[0_0_10px_#fff]' : 'bg-white/60'}`}
-                    />
+                    <span className={`mr-2 inline-block h-1.5 w-1.5 align-middle ${busy ? 'blink bg-[#ff3b30]' : 'bg-white/60'}`} />
                     GET <span className="text-zinc-100">/api/stack</span>
-                    {trace && (
+                    {trace ? (
                         <span className="ml-1">
                             · {trace.status} · <span className="text-zinc-100">{trace.duration_ms.toFixed(1)} ms</span> at the server
                             {client && <> · {ms(client.total_ms)} ms in the browser</>} · cache {cache}
                         </span>
+                    ) : (
+                        <span className="ml-1 text-zinc-600">· {headline ?? 'no trace'}</span>
                     )}
                 </div>
                 <div className="flex flex-wrap items-center gap-3">
-                    {trace && !playing && (
+                    {trace && !busy && (
                         <>
                             <button
                                 type="button"
                                 onClick={() => play(steps, 'slow')}
-                                className="font-mono text-[12.5px] text-zinc-500 underline decoration-white/25 underline-offset-4 hover:text-zinc-100"
+                                className="jitter font-mono text-[12.5px] text-zinc-500 underline decoration-white/25 underline-offset-4 hover:text-zinc-100"
                             >
                                 replay slowly
                             </button>
                             <button
                                 type="button"
                                 onClick={() => play(steps, 'real')}
-                                className="font-mono text-[12.5px] text-zinc-500 underline decoration-white/25 underline-offset-4 hover:text-zinc-100"
+                                className="jitter font-mono text-[12.5px] text-zinc-500 underline decoration-white/25 underline-offset-4 hover:text-zinc-100"
                             >
                                 1× real time
                             </button>
@@ -257,69 +359,57 @@ export function Anatomy() {
                     )}
                     <button
                         type="button"
-                        onClick={send}
-                        disabled={status === 'sending' || playing}
-                        className="rounded-lg bg-white px-4 py-2 text-sm font-medium text-black transition-colors hover:bg-zinc-200 disabled:opacity-50"
+                        onClick={run}
+                        disabled={busy}
+                        className="jitter rounded-sm bg-white px-4 py-2 font-mono text-[12px] tracking-[0.08em] text-black uppercase transition-colors hover:bg-[#ff3b30] disabled:opacity-40"
                     >
-                        {status === 'idle' ? 'Send the request' : status === 'sending' ? 'Sending…' : playing ? 'Playing…' : 'Send it again'}
+                        {status === 'waiting' ? 'Build and send' : busy ? (playing ? 'Replaying…' : 'Working…') : 'Rebuild and send'}
                     </button>
                 </div>
             </div>
 
-            {status === 'error' && (
-                <p className="mt-4 rounded-lg border border-orange-400/30 bg-[#ff3b30]/5 px-4 py-3 text-sm text-orange-200">
-                    The request did not come back with a trace. Tracing may be disabled, or the record expired before it could be read.
-                </p>
-            )}
-
-            {status === 'idle' && (
-                <p className="mt-6 max-w-2xl text-zinc-400">
-                    Nothing is staged here. Press the button and the page will call its own API, read the trace id off the response, post back what
-                    only the browser can measure, and then draw the record that came out of it.
-                </p>
-            )}
-
-            {trace && active && (
-                <div className="mt-6 grid gap-8 lg:grid-cols-[minmax(0,460px)_minmax(0,1fr)] lg:items-start lg:gap-16">
-                    <div className="top-16 hidden max-h-[calc(100vh-5rem)] lg:sticky lg:block">
-                        <div className="flex items-baseline justify-between gap-3">
-                            <div className="flex items-baseline gap-2">
-                                <span
-                                    className={`font-mono text-5xl font-medium tracking-tight text-zinc-50 tabular-nums ${corrupt ? 'split' : ''}`}
-                                    data-text={ms(elapsed ?? total)}
-                                >
-                                    {ms(elapsed ?? total)}
-                                </span>
-                                <span className="font-mono text-sm text-zinc-500">ms{playing ? ' · replaying' : ' · end to end'}</span>
-                            </div>
+            <div className="mt-6 grid gap-8 lg:grid-cols-[minmax(0,460px)_minmax(0,1fr)] lg:items-start lg:gap-16">
+                <div className="top-16 hidden max-h-[calc(100vh-5rem)] lg:sticky lg:block">
+                    <div className="flex items-baseline justify-between gap-3">
+                        <div className="flex items-baseline gap-2">
                             <span
-                                className={`rounded-sm px-1.5 py-0.5 font-mono text-[10.5px] tracking-[0.14em] uppercase ${
-                                    cache === 'miss' ? 'bg-[#ff3b30] text-black' : 'border border-white/20 text-zinc-300'
-                                }`}
+                                className={`font-mono text-5xl font-medium tracking-tight text-zinc-50 tabular-nums ${corrupt ? 'split' : ''}`}
+                                data-text={ms(elapsed ?? total)}
                             >
-                                cache {cache ?? '—'}
+                                {ms(elapsed ?? total)}
                             </span>
+                            <span className="font-mono text-sm text-zinc-500">ms{playing ? ' · replaying' : trace ? ' · end to end' : ''}</span>
                         </div>
-                        <StackVisual
-                            className="mx-auto max-h-[56vh] w-full"
-                            active={active.layer}
-                            seen={seen}
-                            totals={totals}
-                            orbY={orbY}
-                            flying={playing}
-                            onPick={jumpToLayer}
-                            format={ms}
-                            corrupt={corrupt}
-                        />
-                        <div className="mt-2 min-h-[72px] rounded-lg border border-white/8 bg-white/[0.02] px-4 py-3">
-                            <div className="flex items-baseline justify-between gap-3">
-                                <span className="truncate text-[15px] font-medium text-zinc-50">{active.title}</span>
-                                <span className={`shrink-0 font-mono text-[13px] ${active.slow ? 'text-[#ff3b30]' : 'text-zinc-300'}`}>
-                                    {ms(active.ms)} ms
-                                </span>
-                            </div>
-                            <p className="mt-1 line-clamp-2 text-[13px] text-zinc-400">{active.detail}</p>
-                        </div>
+                        <span
+                            className={`rounded-sm px-1.5 py-0.5 font-mono text-[10.5px] tracking-[0.14em] uppercase ${
+                                cache === 'miss' ? 'bg-[#ff3b30] text-black' : 'border border-white/20 text-zinc-300'
+                            }`}
+                        >
+                            cache {cache ?? '—'}
+                        </span>
+                    </div>
+
+                    {tower('mx-auto max-h-[56vh] w-full')}
+
+                    <div className="mt-2 min-h-[72px] rounded-sm border border-white/10 bg-white/[0.02] px-4 py-3">
+                        {active ? (
+                            <>
+                                <div className="flex items-baseline justify-between gap-3">
+                                    <span className="truncate text-[15px] font-medium text-zinc-50">{active.title}</span>
+                                    <span className={`shrink-0 font-mono text-[13px] ${active.slow ? 'text-[#ff3b30]' : 'text-zinc-300'}`}>
+                                        {ms(active.ms)} ms
+                                    </span>
+                                </div>
+                                <p className="mt-1 line-clamp-2 text-[13px] text-zinc-400">{active.detail}</p>
+                            </>
+                        ) : (
+                            <p className="font-mono text-[12.5px] text-zinc-500">
+                                {headline ?? 'no trace'} <span className="blink inline-block h-3.5 w-2 translate-y-0.5 bg-zinc-400" />
+                            </p>
+                        )}
+                    </div>
+
+                    {trace && active && (
                         <div className="mt-3">
                             <div className="mb-2 font-mono text-[11px] tracking-[0.12em] text-zinc-500 uppercase">Where the time went</div>
                             <Bar
@@ -332,127 +422,119 @@ export function Anatomy() {
                                 {rows !== null && <> · {rows} rows returned</>}
                             </div>
                         </div>
-                        {raw && (
-                            <div className="scanlines relative mt-4 overflow-hidden rounded-md border border-white/10 bg-[#050506] p-3">
-                                <div className="mb-2 flex items-baseline justify-between gap-3 font-mono text-[10.5px] tracking-[0.12em] text-zinc-500 uppercase">
-                                    <span>response body · {new TextEncoder().encode(raw).length.toLocaleString()} bytes</span>
-                                    <span>
-                                        crc32 <span className="text-zinc-200">{checksum}</span>
-                                    </span>
-                                </div>
-                                <HexDump source={raw} rows={5} hot={corrupt ? [18, 34] : null} />
+                    )}
+                    {raw && (
+                        <div className="scanlines relative mt-4 overflow-hidden rounded-sm border border-white/10 bg-[#050506] p-3">
+                            <div className="mb-2 flex items-baseline justify-between gap-3 font-mono text-[10.5px] tracking-[0.12em] text-zinc-500 uppercase">
+                                <span>response body · {new TextEncoder().encode(raw).length.toLocaleString()} bytes</span>
+                                <span>
+                                    crc32 <span className="text-zinc-200">{checksum}</span>
+                                </span>
                             </div>
-                        )}
-                    </div>
-
-                    <div className="sticky top-14 z-20 -mx-4 border-b border-white/8 bg-black/90 px-4 pt-3 pb-3 backdrop-blur lg:hidden">
-                        <div className="flex items-baseline justify-between gap-3">
-                            <span className="font-mono text-2xl font-medium text-zinc-50 tabular-nums">
-                                {ms(elapsed ?? total)} <span className="text-sm text-zinc-500">ms{playing ? ' · playing' : ''}</span>
-                            </span>
-                            <span className={`shrink-0 font-mono text-[12px] ${active.slow ? 'text-[#ff3b30]' : 'text-zinc-400'}`}>
-                                {ms(active.ms)} ms
-                            </span>
+                            <HexDump source={raw} rows={5} hot={corrupt ? [18, 34] : null} />
                         </div>
-                        <StackVisual
-                            className="mx-auto my-2 max-h-[34vh] w-full"
-                            active={active.layer}
-                            seen={seen}
-                            totals={totals}
-                            orbY={orbY}
-                            flying={playing}
-                            onPick={jumpToLayer}
-                            format={ms}
-                            corrupt={corrupt}
-                        />
-                        <div className="mb-2 truncate text-[14px] font-medium text-zinc-100">{active.title}</div>
-                        <Bar steps={steps} activeKey={active.key} onPick={setActiveKey} />
+                    )}
+                </div>
+
+                <div className="sticky top-14 z-20 -mx-4 border-b border-white/8 bg-black/90 px-4 pt-3 pb-3 backdrop-blur lg:hidden">
+                    <div className="flex items-baseline justify-between gap-3">
+                        <span className="font-mono text-2xl font-medium text-zinc-50 tabular-nums">
+                            {ms(elapsed ?? total)} <span className="text-sm text-zinc-500">ms{playing ? ' · replaying' : ''}</span>
+                        </span>
+                        <span className={`shrink-0 font-mono text-[12px] ${active?.slow ? 'text-[#ff3b30]' : 'text-zinc-400'}`}>
+                            {active ? `${ms(active.ms)} ms` : `cache ${cache ?? '—'}`}
+                        </span>
                     </div>
+                    {tower('mx-auto my-2 max-h-[34vh] w-full')}
+                    <div className="mb-2 truncate text-[14px] font-medium text-zinc-100">{active?.title ?? headline}</div>
+                    {trace && active && <Bar steps={steps} activeKey={active.key} onPick={setActiveKey} />}
+                </div>
 
-                    <div>
-                        {steps.map((step, i) => (
-                            <section
-                                key={step.key}
-                                ref={(el) => {
-                                    stepRefs.current[step.key] = el;
-                                }}
-                                className={`scroll-mt-24 border-t border-white/8 py-8 transition-opacity first:border-t-0 lg:py-[9vh] ${
-                                    step.key === active.key ? 'opacity-100' : 'opacity-55'
-                                }`}
-                            >
-                                <div className="flex flex-wrap items-baseline gap-2 font-mono text-[11px] tracking-[0.12em] uppercase">
-                                    <span className="text-[#ff3b30]">{`0x${(i * 16).toString(16).toUpperCase().padStart(3, '0')}`}</span>
-                                    <span className="text-zinc-500">{LAYERS.find((l) => l.id === step.layer)?.name}</span>
-                                    {step.depth > 0 && <span className="text-zinc-600">nested</span>}
-                                </div>
-                                <h3 className="mt-3 flex flex-wrap items-baseline gap-3 text-xl leading-tight font-medium text-zinc-50 sm:text-2xl">
+                <div className="min-w-0">
+                    <BootLog lines={log} live={busy && !playing} />
+
+                    {steps.map((step, i) => (
+                        <section
+                            key={step.key}
+                            ref={(el) => {
+                                stepRefs.current[step.key] = el;
+                            }}
+                            className={`line-in scroll-mt-24 border-t border-white/8 py-8 transition-opacity lg:py-[9vh] ${
+                                step.key === active?.key ? 'opacity-100' : 'opacity-55'
+                            }`}
+                            style={{ animationDelay: `${Math.min(i, 12) * 40}ms` }}
+                        >
+                            <div className="flex flex-wrap items-baseline gap-2 font-mono text-[11px] tracking-[0.12em] uppercase">
+                                <span className="text-[#ff3b30]">{`0x${(i * 16).toString(16).toUpperCase().padStart(3, '0')}`}</span>
+                                <span className="text-zinc-500">{LAYERS.find((l) => l.id === step.layer)?.name}</span>
+                                {step.depth > 0 && <span className="text-zinc-600">nested</span>}
+                            </div>
+                            <h3 className="mt-3 flex flex-wrap items-baseline gap-3 text-xl leading-tight font-medium text-zinc-50 sm:text-2xl">
+                                <span className={step.slow ? 'split' : ''} data-text={step.title}>
                                     {step.title}
-                                    <span className={`font-mono text-sm ${step.slow ? 'text-[#ff3b30]' : 'text-zinc-400'}`}>
-                                        <DigitRoll value={step.ms} format={ms} /> ms{step.slow && ' · slowest'}
-                                    </span>
-                                </h3>
-                                <p className="mt-3 text-zinc-200">{step.detail}</p>
+                                </span>
+                                <span className={`font-mono text-sm ${step.slow ? 'text-[#ff3b30]' : 'text-zinc-400'}`}>
+                                    <DigitRoll value={step.ms} format={ms} /> ms{step.slow && ' · slowest'}
+                                </span>
+                            </h3>
+                            <p className="mt-3 text-zinc-200">{step.detail}</p>
 
-                                {step.sql && (
-                                    <pre className="mt-4 overflow-x-auto rounded-lg border border-white/8 bg-[#08080a] px-4 py-3 font-mono text-[12px] leading-relaxed text-zinc-200">
-                                        {step.sql}
-                                    </pre>
-                                )}
-                                {step.explain && step.explain.length > 0 && (
-                                    <div className="mt-3 overflow-x-auto">
-                                        <table className="w-max min-w-full border-collapse font-mono text-[11.5px]">
-                                            <thead>
-                                                <tr>
-                                                    {Object.keys(step.explain[0]).map((key) => (
-                                                        <th
-                                                            key={key}
-                                                            className="pr-4 pb-1 text-left text-[10px] tracking-[0.1em] text-zinc-500 uppercase"
-                                                        >
-                                                            {key}
-                                                        </th>
+                            {step.sql && (
+                                <pre className="mt-4 overflow-x-auto rounded-sm border border-white/8 bg-[#08080a] px-4 py-3 font-mono text-[12px] leading-relaxed text-zinc-200">
+                                    {step.sql}
+                                </pre>
+                            )}
+                            {step.explain && step.explain.length > 0 && (
+                                <div className="mt-3 overflow-x-auto">
+                                    <table className="w-max min-w-full border-collapse font-mono text-[11.5px]">
+                                        <thead>
+                                            <tr>
+                                                {Object.keys(step.explain[0]).map((key) => (
+                                                    <th
+                                                        key={key}
+                                                        className="pr-4 pb-1 text-left text-[10px] tracking-[0.1em] text-zinc-500 uppercase"
+                                                    >
+                                                        {key}
+                                                    </th>
+                                                ))}
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {step.explain.map((row, r) => (
+                                                <tr key={r}>
+                                                    {Object.values(row).map((value, c) => (
+                                                        <td key={c} className="border-t border-white/8 py-1.5 pr-4 whitespace-nowrap text-zinc-300">
+                                                            {String(value)}
+                                                        </td>
                                                     ))}
                                                 </tr>
-                                            </thead>
-                                            <tbody>
-                                                {step.explain.map((row, r) => (
-                                                    <tr key={r}>
-                                                        {Object.values(row).map((value, c) => (
-                                                            <td
-                                                                key={c}
-                                                                className="border-t border-white/8 py-1.5 pr-4 whitespace-nowrap text-zinc-300"
-                                                            >
-                                                                {String(value)}
-                                                            </td>
-                                                        ))}
-                                                    </tr>
-                                                ))}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                )}
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
 
-                                {step.kind === 'gap' && (
-                                    <div className="relative mt-4 h-16 overflow-hidden rounded-md border border-white/10 bg-black">
-                                        <NoiseField className="absolute inset-0 h-full w-full" density={0.08 + unattributedShare * 0.5} />
-                                        <span className="absolute bottom-1.5 left-2 font-mono text-[10.5px] tracking-[0.12em] text-zinc-400 uppercase">
-                                            {Math.round(unattributedShare * 100)}% of server time · no span claimed it
-                                        </span>
-                                    </div>
-                                )}
+                            {step.kind === 'gap' && (
+                                <div className="relative mt-4 h-16 overflow-hidden rounded-sm border border-white/10 bg-black">
+                                    <NoiseField className="absolute inset-0 h-full w-full" density={0.08 + unattributedShare * 0.5} />
+                                    <span className="absolute bottom-1.5 left-2 font-mono text-[10.5px] tracking-[0.12em] text-zinc-400 uppercase">
+                                        {Math.round(unattributedShare * 100)}% of server time · no span claimed it
+                                    </span>
+                                </div>
+                            )}
 
-                                {step.why && (
-                                    <div className="mt-5 border-l-2 border-white/20 py-1 pl-4">
-                                        <div className="font-mono text-[10.5px] tracking-[0.14em] text-[#ff3b30] uppercase">Why</div>
-                                        <p className="mt-1.5 text-[15px] text-zinc-400">{step.why}</p>
-                                    </div>
-                                )}
+                            {step.why && (
+                                <div className="mt-5 border-l-2 border-white/20 py-1 pl-4">
+                                    <div className="font-mono text-[10.5px] tracking-[0.14em] text-[#ff3b30] uppercase">Why</div>
+                                    <p className="mt-1.5 text-[15px] text-zinc-400">{step.why}</p>
+                                </div>
+                            )}
 
-                                <Code step={step} />
-                            </section>
-                        ))}
-                    </div>
+                            <Code step={step} />
+                        </section>
+                    ))}
                 </div>
-            )}
+            </div>
         </div>
     );
 }

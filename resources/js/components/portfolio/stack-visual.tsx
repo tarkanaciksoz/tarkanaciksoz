@@ -220,9 +220,18 @@ function Shape({ layer, lit, corrupt }: { layer: VisualLayer; lit: boolean; corr
     );
 }
 
+/** Delay between two layers landing while the tower assembles, in ms. */
+export const DROP_STAGGER = 150;
+export const DROP_DURATION = 740;
+export const ASSEMBLY_MS = (VISUAL_LAYERS.length - 1) * DROP_STAGGER + DROP_DURATION;
+/** Bottom-up: the database lands first, the browser last. */
+export const dropOrder = (id: LayerId) => VISUAL_LAYERS.length - 1 - VISUAL_LAYERS.findIndex((l) => l.id === id);
+
 type Props = {
     className?: string;
-    active: LayerId;
+    active: LayerId | null;
+    /** Play the assembly: layers fall into place from the bottom up. */
+    building?: boolean;
     seen: Set<LayerId>;
     totals: Partial<Record<LayerId, number>>;
     orbY: number;
@@ -233,7 +242,7 @@ type Props = {
     corrupt?: boolean;
 };
 
-export function StackVisual({ className = 'w-full', active, seen, totals, orbY, flying, onPick, format, corrupt = false }: Props) {
+export function StackVisual({ className = 'w-full', active, building = false, seen, totals, orbY, flying, onPick, format, corrupt = false }: Props) {
     const deepest = Math.max(Y.browser, ...[...seen].map((id) => Y[id]));
 
     return (
@@ -313,7 +322,30 @@ export function StackVisual({ className = 'w-full', active, seen, totals, orbY, 
                         className="cursor-pointer outline-none"
                         opacity={visited ? 1 : 0.42}
                     >
-                        <Shape layer={layer} lit={lit} corrupt={corrupt} />
+                        <g
+                            className={building ? 'layer-drop' : undefined}
+                            style={building ? { animationDelay: `${dropOrder(layer.id) * DROP_STAGGER}ms` } : undefined}
+                        >
+                            <Shape layer={layer} lit={lit} corrupt={corrupt} />
+                        </g>
+                        {building && (
+                            <g className="layer-impact" style={{ animationDelay: `${dropOrder(layer.id) * DROP_STAGGER}ms` }}>
+                                <rect
+                                    x={CX - (layer.shape === 'node' ? 26 : 128)}
+                                    y={cy + (layer.shape === 'node' ? 12 : layer.shape === 'cylinder' ? 26 : H + T + 2)}
+                                    width={layer.shape === 'node' ? 52 : 256}
+                                    height="1.5"
+                                    fill="#fff"
+                                />
+                                <rect
+                                    x={CX - (layer.shape === 'node' ? 14 : 70)}
+                                    y={cy + (layer.shape === 'node' ? 15 : layer.shape === 'cylinder' ? 30 : H + T + 6)}
+                                    width={layer.shape === 'node' ? 28 : 140}
+                                    height="1"
+                                    fill="#ff3b30"
+                                />
+                            </g>
+                        )}
                         {lit && layer.shape !== 'node' && layer.shape !== 'device' && (
                             <ellipse
                                 cx={CX}
