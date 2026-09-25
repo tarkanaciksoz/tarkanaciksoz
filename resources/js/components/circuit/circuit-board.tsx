@@ -153,7 +153,7 @@ export function CircuitBoard({ layers, flows }: { layers: StackLayer[]; flows: F
     if (!flow) return null;
 
     return (
-        <div ref={rootRef} className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start xl:gap-10">
+        <div ref={rootRef} className="grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start xl:gap-10">
             {/* Board: desktop */}
             <div className="relative hidden min-w-0 overflow-hidden rounded-[2px] border border-white/12 bg-[#040405]/80 lg:block">
                 <svg viewBox={`0 0 ${BOARD.w} ${BOARD.h}`} className="block h-auto w-full" role="img" aria-label={`Circuit board: ${flow.title}`}>
@@ -312,7 +312,7 @@ export function CircuitBoard({ layers, flows }: { layers: StackLayer[]; flows: F
             </div>
 
             {/* Pipeline: phones and tablets */}
-            <div className="lg:hidden">
+            <div className="min-w-0 lg:hidden">
                 <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-3">
                     {flows.map((f, i) => (
                         <button

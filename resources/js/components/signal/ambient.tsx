@@ -5,24 +5,25 @@ import { useEffect, useRef } from 'react';
  *
  * 1. Bits: sparse 0s and 1s drifting down. When one flips it glitches for a few
  *    frames (noise glyphs, split red and cyan) before it settles.
- * 2. Light: a few hairline streaks in the tear-line colours (red, white, cyan) crossing
- *    the page at any angle, from any edge. Now and then two are timed to reach the same
- *    point — head-on or crossing — and burst into a handful of sparks; the bits nearby
- *    glitch for a moment.
+ * 2. Light: now and then a streak crosses the page at any angle, from any edge: a bright
+ *    head and a trail of short dashes, its red and cyan channels split to either side. Now and then two are timed to reach the same
+ *    point, head-on or crossing. The frame they carried is lost: a few of its bytes spill
+ *    out, scrambled at first, and drift apart; the bits nearby glitch for a moment.
  *
  * Only what is on screen is drawn; new light is spawned where the reader is looking.
  */
 
-type Bit = { x: number; y: number; vy: number; ch: string; a: number; size: number; red: boolean; glitch: number };
-type Streak = { x: number; y: number; vx: number; vy: number; len: number; life: number; alive: boolean };
+type Bit = { x: number; y: number; vy: number; ch: string; a: number; size: number; color: string; glitch: number };
+type Streak = { x: number; y: number; vx: number; vy: number; len: number; life: number; alive: boolean; color: string };
 type Pair = { a: Streak; b: Streak; x: number; y: number; frames: number };
-type Spark = { x: number; y: number; vx: number; vy: number; life: number; max: number; color: string };
-type Flash = { x: number; y: number; life: number };
+type Drop = { x: number; y: number; vx: number; vy: number; text: string; life: number; max: number; color: string };
 
 const NOISE = '#%&@$*+=<>/\\|{}[]?!';
 const RED = '255,59,48';
 const CYAN = '34,211,238';
 const WHITE = '255,255,255';
+/** Each streak carries its own colour; red and cyan stay as the glitch split. */
+const COLORS = [RED, CYAN, WHITE, '251,191,36', '62,207,142', '167,139,250', '244,114,182'];
 
 const rand = (a: number, b: number) => a + Math.random() * (b - a);
 const pick = <T,>(xs: T[]) => xs[(Math.random() * xs.length) | 0];
@@ -43,15 +44,14 @@ export function Ambient() {
         let bits: Bit[] = [];
         let streaks: Streak[] = [];
         let pairs: Pair[] = [];
-        let sparks: Spark[] = [];
-        let flashes: Flash[] = [];
+        let drops: Drop[] = [];
         let raf = 0;
         let lastStep = 0;
         let nextLone = 0;
         let nextPair = 0;
 
         const addBits = (from: number, to: number) => {
-            const count = Math.round((W * (to - from)) / 50000);
+            const count = Math.round((W * (to - from)) / 75000);
             for (let i = 0; i < count; i++) {
                 bits.push({
                     x: rand(0, W),
@@ -60,7 +60,7 @@ export function Ambient() {
                     ch: Math.random() < 0.5 ? '0' : '1',
                     a: rand(0.05, 0.13),
                     size: rand(9, 12),
-                    red: Math.random() < 0.07,
+                    color: Math.random() < 0.12 ? pick(COLORS) : WHITE,
                     glitch: 0,
                 });
             }
@@ -101,9 +101,10 @@ export function Ambient() {
                 y: through.y - Math.sin(angle) * back,
                 vx: Math.cos(angle) * speed,
                 vy: Math.sin(angle) * speed,
-                len: rand(60, 140),
+                len: rand(50, 110),
                 life: Math.ceil((back * 2.2) / speed),
                 alive: true,
+                color: pick(COLORS),
             });
         };
 
@@ -116,7 +117,9 @@ export function Ambient() {
             const frames = Math.round(rand(80, 130));
             const a = rand(0, Math.PI * 2);
             const b = a + Math.PI + rand(-1.2, 1.2);
-            const make = (angle: number): Streak => {
+            const ca = pick(COLORS);
+            const cb = pick(COLORS.filter((c) => c !== ca));
+            const make = (angle: number, color: string): Streak => {
                 const dist = diag() * rand(0.45, 0.7);
                 const speed = dist / frames;
                 return {
@@ -124,27 +127,42 @@ export function Ambient() {
                     y: meet.y - Math.sin(angle) * dist,
                     vx: Math.cos(angle) * speed,
                     vy: Math.sin(angle) * speed,
-                    len: rand(70, 130),
+                    len: rand(55, 105),
                     life: frames + 2,
                     alive: true,
+                    color,
                 };
             };
-            const pair = { a: make(a), b: make(b), x: meet.x, y: meet.y, frames };
+            const pair = { a: make(a, ca), b: make(b, cb), x: meet.x, y: meet.y, frames };
             streaks.push(pair.a, pair.b);
             pairs.push(pair);
         };
 
-        const explode = (x: number, y: number) => {
-            flashes.push({ x, y, life: 10 });
-            const n = 14 + ((Math.random() * 10) | 0);
+        const byte = () => ((Math.random() * 256) | 0).toString(16).toUpperCase().padStart(2, '0');
+
+        /**
+         * Two signals hit the same point: the frame they carried is lost and its bytes
+         * spill out, scrambled at first, then settling as they drift apart and fade.
+         * The nearest bits pick up the interference and glitch.
+         */
+        const collide = (x: number, y: number, colors: string[]) => {
+            const n = 4 + ((Math.random() * 3) | 0);
             for (let i = 0; i < n; i++) {
                 const angle = rand(0, Math.PI * 2);
-                const v = rand(0.6, 2.8);
-                const max = rand(18, 40);
-                sparks.push({ x, y, vx: Math.cos(angle) * v, vy: Math.sin(angle) * v * 0.6, life: max, max, color: pick([RED, RED, WHITE, CYAN]) });
+                const v = rand(0.25, 0.7);
+                const max = Math.round(rand(80, 120));
+                drops.push({
+                    x,
+                    y,
+                    vx: Math.cos(angle) * v,
+                    vy: Math.sin(angle) * v,
+                    text: byte(),
+                    life: max,
+                    max,
+                    color: colors[i % colors.length],
+                });
             }
-            // The shock reaches the nearest bits: they glitch.
-            for (const b of bits) if (Math.abs(b.x - x) < 90 && Math.abs(b.y - y) < 60) b.glitch = 9;
+            for (const b of bits) if (Math.abs(b.x - x) < 80 && Math.abs(b.y - y) < 50) b.glitch = 8;
         };
 
         const step = (now: number) => {
@@ -163,11 +181,11 @@ export function Ambient() {
 
             if (now >= nextLone) {
                 spawnLone();
-                nextLone = now + rand(5000, 9000);
+                nextLone = now + rand(9000, 16000);
             }
             if (now >= nextPair) {
                 spawnPair();
-                nextPair = now + rand(9000, 16000);
+                nextPair = now + rand(16000, 28000);
             }
 
             for (const s of streaks) {
@@ -181,20 +199,21 @@ export function Ambient() {
                 if (p.a.alive || p.b.alive) {
                     p.a.alive = false;
                     p.b.alive = false;
-                    explode(p.x, p.y);
+                    collide(p.x, p.y, [p.a.color, p.b.color]);
                 }
                 return false;
             });
             streaks = streaks.filter((s) => s.alive);
 
-            sparks = sparks.filter((sp) => {
-                sp.x += sp.vx;
-                sp.y += sp.vy;
-                sp.vx *= 0.96;
-                sp.vy *= 0.96;
-                return --sp.life > 0;
+            drops = drops.filter((d) => {
+                d.x += d.vx;
+                d.y += d.vy;
+                d.vx *= 0.985;
+                d.vy *= 0.985;
+                // Scrambled for the first third of its life, then it holds its value.
+                if (d.life > d.max * 0.66 && Math.random() < 0.35) d.text = byte();
+                return --d.life > 0;
             });
-            flashes = flashes.filter((f) => --f.life > 0);
         };
 
         const mono = (px: number) => `${px}px ui-monospace, SFMono-Regular, Menlo, monospace`;
@@ -211,7 +230,7 @@ export function Ambient() {
                 if (b.y < top || b.y > bottom) continue;
                 const y = b.y - sy;
                 ctx.font = mono(b.size);
-                const rgb = b.red ? RED : WHITE;
+                const rgb = b.color;
                 if (b.glitch > 0) {
                     const c = b.glitch > 2 ? pick([...NOISE, '0', '1']) : b.ch;
                     const off = 1 + (b.glitch % 3);
@@ -228,42 +247,51 @@ export function Ambient() {
             }
 
             // Streaks: the tear-line gradient, head first.
+            // Streaks: a bright head and a trail of short dashes, like bits in flight,
+            // with the red and cyan channels split to either side of it.
             for (const s of streaks) {
                 if (s.y < top - 160 || s.y > bottom + 160) continue;
                 const speed = Math.hypot(s.vx, s.vy) || 1;
+                const ux = s.vx / speed;
+                const uy = s.vy / speed;
+                const px = -uy;
+                const py = ux;
                 const hx = s.x;
                 const hy = s.y - sy;
-                const tx = hx - (s.vx / speed) * s.len;
-                const ty = hy - (s.vy / speed) * s.len;
-                const g = ctx.createLinearGradient(tx, ty, hx, hy);
-                g.addColorStop(0, `rgba(${RED},0)`);
-                g.addColorStop(0.35, `rgba(${RED},0.55)`);
-                g.addColorStop(0.72, `rgba(${WHITE},0.8)`);
-                g.addColorStop(0.9, `rgba(${CYAN},0.7)`);
-                g.addColorStop(1, `rgba(${CYAN},0)`);
-                ctx.strokeStyle = g;
+                const dash = 5;
+                const gap = 4;
+
                 ctx.lineWidth = 1;
-                ctx.beginPath();
-                ctx.moveTo(tx, ty);
-                ctx.lineTo(hx, hy);
-                ctx.stroke();
-                ctx.fillStyle = `rgba(${WHITE},0.85)`;
+                for (let d = 3; d < s.len; d += dash + gap) {
+                    const fade = 1 - d / s.len;
+                    const x1 = hx - ux * d;
+                    const y1 = hy - uy * d;
+                    const x2 = hx - ux * Math.min(s.len, d + dash);
+                    const y2 = hy - uy * Math.min(s.len, d + dash);
+                    for (const [rgb, off, a] of [
+                        [RED, 1.2, 0.22],
+                        [CYAN, -1.2, 0.2],
+                        [s.color, 0, 0.7],
+                    ] as const) {
+                        ctx.strokeStyle = `rgba(${rgb},${(a * fade).toFixed(3)})`;
+                        ctx.beginPath();
+                        ctx.moveTo(x1 + px * off, y1 + py * off);
+                        ctx.lineTo(x2 + px * off, y2 + py * off);
+                        ctx.stroke();
+                    }
+                }
+                ctx.fillStyle = `rgba(${s.color},0.95)`;
                 ctx.fillRect(Math.round(hx) - 1, Math.round(hy) - 1, 2, 2);
+                ctx.fillStyle = `rgba(${WHITE},0.9)`;
+                ctx.fillRect(Math.round(hx), Math.round(hy), 1, 1);
             }
 
-            for (const f of flashes) {
-                if (f.y < top || f.y > bottom) continue;
-                const r = (10 - f.life) * 1.8 + 2;
-                ctx.fillStyle = `rgba(${WHITE},${(f.life / 10) * 0.35})`;
-                ctx.beginPath();
-                ctx.arc(f.x, f.y - sy, r, 0, Math.PI * 2);
-                ctx.fill();
-            }
-
-            for (const sp of sparks) {
-                if (sp.y < top || sp.y > bottom) continue;
-                ctx.fillStyle = `rgba(${sp.color},${Math.min(0.9, (sp.life / sp.max) * 1.1).toFixed(3)})`;
-                ctx.fillRect(Math.round(sp.x), Math.round(sp.y - sy), 1.5, 1.5);
+            ctx.font = mono(10);
+            for (const d of drops) {
+                if (d.y < top || d.y > bottom) continue;
+                const a = Math.min(0.6, (d.life / d.max) * 0.75);
+                ctx.fillStyle = `rgba(${d.color},${a.toFixed(3)})`;
+                ctx.fillText(d.text, Math.round(d.x), Math.round(d.y - sy));
             }
         };
 
