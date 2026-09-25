@@ -31,6 +31,7 @@ class PortfolioSeeder extends Seeder
                     ['name' => $item['name']],
                     [
                         'usage' => $item['usage'],
+                        'services' => $item['services'] ?? null,
                         'why' => $item['why'],
                         'instead_of' => $item['instead_of'],
                         'position' => $item['position'],

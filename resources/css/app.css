@@ -270,3 +270,26 @@
         opacity: 0;
     }
 }
+
+/* Logic analyser: a cursor sweeps the capture, pulses fire as it passes. */
+.la-sweep {
+    animation: la-sweep-x linear infinite;
+    transform-box: view-box;
+}
+@keyframes la-sweep-x {
+    from { transform: translateX(0); }
+    to { transform: translateX(var(--la-travel, 1100px)); }
+}
+@keyframes la-fire {
+    0% { opacity: 0.55; }
+    12% { opacity: 0; }
+    100% { opacity: 0; }
+}
+.la-fire {
+    opacity: 0;
+    mix-blend-mode: screen;
+    animation: la-fire 7s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+    .la-sweep, .la-fire { animation: none; }
+}

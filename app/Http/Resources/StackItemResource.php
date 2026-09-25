@@ -10,7 +10,7 @@ use Illuminate\Http\Resources\Json\JsonResource;
 class StackItemResource extends JsonResource
 {
     /**
-     * @return array{id:int, name:string, usage:string|null, why:string, instead_of:string|null}
+     * @return array{id:int, name:string, usage:string|null, services:int|null, why:string, instead_of:string|null}
      */
     public function toArray(Request $request): array
     {
@@ -18,6 +18,7 @@ class StackItemResource extends JsonResource
             'id' => $this->id,
             'name' => $this->name,
             'usage' => $this->usage,
+            'services' => $this->services,
             'why' => $this->why,
             'instead_of' => $this->instead_of,
         ];

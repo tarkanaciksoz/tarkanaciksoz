@@ -2,6 +2,8 @@ export type StackItem = {
     id: number;
     name: string;
     usage: string | null;
+    /** Services using this tool, when counted; null means not counted. */
+    services: number | null;
     why: string;
     instead_of: string | null;
 };
@@ -93,5 +95,5 @@ export type Trace = {
 
 export type StackResponse = {
     data: StackLayer[];
-    meta: { layers: number; items: number; cache: 'hit' | 'miss'; ttl_seconds: number };
+    meta: { layers: number; items: number; counted: number; cache: 'hit' | 'miss'; ttl_seconds: number };
 };

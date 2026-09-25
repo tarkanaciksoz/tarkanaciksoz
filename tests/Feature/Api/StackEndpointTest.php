@@ -13,6 +13,7 @@ beforeEach(function () {
         'stack_layer_id' => $layer->id,
         'name' => 'MySQL',
         'usage' => 'one database per app',
+        'services' => 12,
         'why' => 'Per-app databases keep the blast radius small.',
         'instead_of' => 'One shared schema.',
         'visible' => true,
@@ -36,6 +37,13 @@ it('returns layers with their visible items', function () {
         ->assertJsonPath('data.0.items.0.name', 'MySQL')
         ->assertJsonPath('meta.layers', 1)
         ->assertJsonPath('meta.items', 1);
+});
+
+it('serves the counted services, and null where nothing was counted', function () {
+    $response = $this->getJson('/api/stack');
+
+    $response->assertJsonPath('data.0.items.0.services', 12)
+        ->assertJsonPath('meta.counted', 1);
 });
 
 it('hides items that are not visible', function () {

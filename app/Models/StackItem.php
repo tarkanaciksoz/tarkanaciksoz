@@ -10,11 +10,11 @@ class StackItem extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['stack_layer_id', 'name', 'usage', 'why', 'instead_of', 'visible', 'position'];
+    protected $fillable = ['stack_layer_id', 'name', 'usage', 'services', 'why', 'instead_of', 'visible', 'position'];
 
     protected function casts(): array
     {
-        return ['visible' => 'boolean'];
+        return ['visible' => 'boolean', 'services' => 'integer'];
     }
 
     public function layer(): BelongsTo

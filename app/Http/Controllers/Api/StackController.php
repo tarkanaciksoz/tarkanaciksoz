@@ -12,7 +12,7 @@ use Illuminate\Http\JsonResponse;
 
 class StackController extends Controller
 {
-    private const CACHE_KEY = 'stack:v1';
+    private const CACHE_KEY = 'stack:v2';
 
     private const TTL_SECONDS = 300;
 
@@ -48,6 +48,7 @@ class StackController extends Controller
             'meta' => [
                 'layers' => count($payload),
                 'items' => array_sum(array_map(fn ($l) => count($l['items']), $payload)),
+                'counted' => array_sum(array_map(fn ($l) => count(array_filter($l['items'], fn ($i) => $i['services'] !== null)), $payload)),
                 'cache' => $cached ? 'hit' : 'miss',
                 'ttl_seconds' => self::TTL_SECONDS,
             ],

@@ -1,7 +1,7 @@
 import { Anatomy } from '@/components/portfolio/anatomy';
-import { StackBoard } from '@/components/portfolio/stack-board';
 import { DecodeText } from '@/components/signal/decode-text';
 import { SignalPanel } from '@/components/signal/signal-panel';
+import { StackExplorer } from '@/components/stack-views/stack-explorer';
 import { apiGet } from '@/lib/api';
 import type { Decision, Profile, StackResponse, System } from '@/types/portfolio';
 import { Head } from '@inertiajs/react';
@@ -67,7 +67,9 @@ export default function Home() {
                                 <a key={href} href={href} className="hover:text-zinc-100">
                                     {label}
                                     {count ? (
-                                        <sup className="ml-0.5 hidden font-mono text-[9px] text-[#ff3b30] sm:inline">{String(count).padStart(2, '0')}</sup>
+                                        <sup className="ml-0.5 hidden font-mono text-[9px] text-[#ff3b30] sm:inline">
+                                            {String(count).padStart(2, '0')}
+                                        </sup>
                                     ) : null}
                                 </a>
                             ))}
@@ -134,7 +136,7 @@ export default function Home() {
                         <section>
                             {stack ? (
                                 <>
-                                    <StackBoard layers={stack.data} rows={stack.meta.items} />
+                                    <StackExplorer layers={stack.data} rows={stack.meta.items} />
                                     <div className="mt-6 flex flex-wrap items-center justify-between gap-4 rounded-sm border border-white/15 bg-[#050506] px-4 py-3">
                                         <p className="font-mono text-[12.5px] text-zinc-400">
                                             This map is not markup. It is{' '}
