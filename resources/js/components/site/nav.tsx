@@ -4,7 +4,7 @@ import { useGlitchBurst } from '../signal/glitch-burst';
 
 const LINKS: [string, string][] = [
     ['#stack', 'Stack'],
-    ['#made', 'Machine'],
+    ['#trace', 'Trace'],
     ['#systems', 'Systems'],
     ['#rules', 'Rules'],
     ['/docs/api', 'API docs'],
@@ -77,7 +77,7 @@ export function Nav({ name, ready }: { name: string | null; ready: boolean }) {
                             className={`relative py-1 font-mono text-[12px] tracking-[0.06em] uppercase transition-colors hover:text-zinc-50 ${
                                 active === href ? 'text-zinc-50' : ''
                             } whitespace-nowrap ${
-                                // Phones keep Stack, Machine and Contact; Systems and API docs return at sm, Rules at md.
+                                // Phones keep Stack, Trace and Contact; Systems and API docs return at sm, Rules at md.
                                 href === '#rules' ? 'hidden md:inline' : href === '/docs/api' || href === '#systems' ? 'hidden sm:inline' : ''
                             }`}
                         >

@@ -164,7 +164,7 @@ export function Hero({ profile, bytes }: { profile: Profile | null; bytes: numbe
                 <div data-hero="cta" className="mt-7 grid grid-cols-2 gap-3 sm:mt-9 sm:flex sm:flex-wrap">
                     <a
                         ref={primary}
-                        href="#made"
+                        href="#trace"
                         className="jitter group inline-flex items-center justify-center gap-2.5 rounded-[2px] bg-zinc-50 px-4 py-3 font-mono text-[12.5px] tracking-[0.08em] whitespace-nowrap text-black uppercase transition-colors hover:bg-[#ff3b30] active:translate-y-px sm:px-5"
                     >
                         Watch a request

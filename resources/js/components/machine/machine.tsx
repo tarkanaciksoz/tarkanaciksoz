@@ -97,7 +97,7 @@ function Rail({ rows, active, onPick }: { rows: Row[]; active: number; onPick: (
 }
 
 /**
- * How this page was made: the page sends the request behind the map, reads the
+ * Where the milliseconds go: the page sends the request behind the map, reads the
  * trace it left, and walks it step by step as the page scrolls. The rail shows
  * where the time went; the bits write the current step's time; the code, SQL,
  * timings or bytes that step rests on sit under it.
@@ -123,7 +123,7 @@ export function Machine() {
 
     // The bits write the current step's time, large, and re-form into the next one as the page scrolls.
     useTextFormation(
-        'made',
+        'trace',
         root,
         stage && row ? `${ms(row.step.ms)}ms` : null,
         () => {

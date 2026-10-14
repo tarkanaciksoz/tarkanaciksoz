@@ -3,6 +3,7 @@ import { useMotion, useStage } from '@/lib/stage';
 import type { System } from '@/types/portfolio';
 import {
     BellRinging,
+    Broadcast,
     CaretDown,
     ChartLineUp,
     CreditCard,
@@ -11,7 +12,6 @@ import {
     MagicWand,
     ShieldCheck,
     SlidersHorizontal,
-    Television,
     type Icon,
 } from '@phosphor-icons/react';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -34,7 +34,7 @@ const ICONS: Record<string, Icon> = {
     analytics: ChartLineUp,
     'control-plane': SlidersHorizontal,
     skeleton: LockKey,
-    realtime: Television,
+    realtime: Broadcast,
     vpn: ShieldCheck,
 };
 const iconFor = (slug: string) => ICONS[slug] ?? Cube;

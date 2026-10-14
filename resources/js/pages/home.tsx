@@ -182,8 +182,8 @@ export default function Home() {
                             </section>
 
                             <TearDivider />
-                            <section id="made" className="relative scroll-mt-16 pt-10">
-                                <SectionHead title="How this page was made">
+                            <section id="trace" className="relative scroll-mt-16 pt-10">
+                                <SectionHead title="Where the milliseconds go">
                                     One real request to this site, sent as you arrived. Scroll, and its time is split across the steps it took. Beside
                                     each step is the code, SQL or bytes behind it.
                                 </SectionHead>

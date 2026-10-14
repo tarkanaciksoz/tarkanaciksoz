@@ -27,27 +27,18 @@
       {
         "name": "Web · React",
         "usage": "control plane",
-        "why": "A React 19 shell over a Laravel API, for the internal control plane. Public sites are server-rendered.",
+        "why": "A React 19 shell over the control-plane API. Public sites are server-rendered.",
         "instead_of": "Vue. Equivalent; the team already knew React.",
         "position": 3,
         "services": null,
         "icon": "react"
-      },
-      {
-        "name": "TV · car",
-        "usage": "5 socket services",
-        "why": "Fire TV, Roku and CarPlay companions. A remote control cannot poll, so each holds a socket.io session.",
-        "instead_of": "Polling over HTTP. Rejected: latency and battery.",
-        "position": 4,
-        "services": 5,
-        "icon": null
       }
     ]
   },
   {
     "slug": "edge",
     "name": "Edge",
-    "tagline": "before the request reaches PHP",
+    "tagline": "before the request reaches the app",
     "glyph": "grille",
     "position": 2,
     "items": [
@@ -92,26 +83,17 @@
   {
     "slug": "app",
     "name": "Application",
-    "tagline": "the request, in PHP",
+    "tagline": "where the request is handled",
     "glyph": "code",
     "position": 3,
     "items": [
       {
-        "name": "PHP 8.4",
-        "usage": "39 services",
-        "why": "Typed properties, enums, readonly classes and attributes. The tracer on this page is built on attributes.",
-        "instead_of": null,
-        "position": 1,
-        "services": 39,
-        "icon": "php"
-      },
-      {
-        "name": "Laravel 12",
-        "usage": "39 services",
-        "why": "One framework for every API, the panel and the packages. One skeleton, one deploy script, two base images. The long tail of small apps stays cheap to keep alive.",
+        "name": "PHP · Laravel",
+        "usage": "every API",
+        "why": "One framework for every API and the control plane: one skeleton, one deploy script, two base images. The long tail of small apps stays cheap to keep alive.",
         "instead_of": "Node or Go per API. Rejected: a small team cannot carry two ecosystems for one job.",
-        "position": 2,
-        "services": 39,
+        "position": 1,
+        "services": null,
         "icon": "laravel"
       },
       {
@@ -119,34 +101,34 @@
         "usage": "9 hot APIs",
         "why": "The app boots once per worker, not once per request. Used only where traffic asks for it. Quiet apps stay on PHP-FPM, which has no long-lived state to leak.",
         "instead_of": "FrankenPHP or RoadRunner. Equivalent; Swoole was already proven here.",
-        "position": 3,
+        "position": 2,
         "services": 9,
         "icon": null
       },
       {
-        "name": "Sanctum · JWT",
+        "name": "Node.js · Socket.IO",
+        "usage": "5 socket services",
+        "why": "Long-lived connections for assistants, signalling and messaging, beside the PHP APIs. A process-per-request runtime is the wrong tool for a socket that stays open.",
+        "instead_of": "Polling over HTTP. Rejected: latency and battery.",
+        "position": 3,
+        "services": 5,
+        "icon": "nodedotjs"
+      },
+      {
+        "name": "JWT · API tokens",
         "usage": "47 · 26 services",
-        "why": "Device JWTs for mobile clients, Sanctum tokens for panels. Every request is attributable and revocable, and nobody sees a login form.",
-        "instead_of": "Passport. Rejected: OAuth flows the apps do not need.",
+        "why": "Device JWTs for mobile clients, API tokens for the panels. Every request is attributable and revocable, and nobody sees a login form.",
+        "instead_of": "A full OAuth server. Rejected: flows the apps do not need.",
         "position": 4,
         "services": 47,
         "icon": "jsonwebtokens"
-      },
-      {
-        "name": "Spatie suite",
-        "usage": "44 services",
-        "why": "Permissions, translations, transformers, image handling, Slack alerts. Boring, maintained, documented. Not where I want to be original.",
-        "instead_of": "Hand-rolled. Rejected on maintenance cost.",
-        "position": 5,
-        "services": 44,
-        "icon": null
       },
       {
         "name": "libvips · ffmpeg",
         "usage": "28 services",
         "why": "Images are resized and optimised on write through libvips. Video goes through ffmpeg in a worker. Nothing heavy runs inside a request.",
         "instead_of": "GD and Imagick. Slower and hungrier at the sizes involved.",
-        "position": 6,
+        "position": 5,
         "services": 28,
         "icon": "ffmpeg"
       }
@@ -189,7 +171,7 @@
       {
         "name": "App Store · Google Play",
         "usage": "25 services",
-        "why": "Server notifications and receipt validation on both stores, normalised into 17 typed subscription events by one shared package.",
+        "why": "Server notifications and receipt validation on both stores, handled synchronously and turned into 17 typed subscription events by one shared package.",
         "instead_of": "Trusting the client. Never.",
         "position": 4,
         "services": 25,
@@ -198,7 +180,7 @@
       {
         "name": "Adapty",
         "usage": "29 services",
-        "why": "Paywalls, experiments and store reconciliation without building them. The purchase package still listens to the native store notifications, so the vendor stays replaceable.",
+        "why": "Paywalls and experiments without building them. Its webhooks are queued and handled async, next to the native store notifications, so a renewal missed by one source is caught by the other.",
         "instead_of": "RevenueCat. Equivalent; Adapty was already in the apps.",
         "position": 5,
         "services": 29,
@@ -288,7 +270,7 @@
       {
         "name": "AWS EC2 · Graviton",
         "usage": "us-east-1",
-        "why": "ARM instances by default: cheaper for the same work, and every image builds for arm64. Sizes come from thirty-day graphs, not habit.",
+        "why": "ARM instances by default: cheaper for the same work. Sizes come from thirty-day graphs, not habit.",
         "instead_of": "x86. Kept only where a dependency demands it; so far none has.",
         "position": 1,
         "services": null,
@@ -305,7 +287,7 @@
       },
       {
         "name": "Docker",
-        "usage": "arm64, Alpine, Swoole",
+        "usage": "two base images",
         "why": "Two base images cover the fleet: PHP-FPM and Octane. Dependencies are installed at build time, so private packages need no credentials at runtime.",
         "instead_of": null,
         "position": 3,
@@ -333,7 +315,7 @@
       {
         "name": "WireGuard",
         "usage": "VPN fleet",
-        "why": "A Laravel API leases peers across a fleet of nodes and enforces those leases against payment events on a schedule.",
+        "why": "An API leases peers across a fleet of nodes and enforces those leases against payment events on a schedule.",
         "instead_of": "OpenVPN. Rejected: heavier, slower to provision.",
         "position": 6,
         "services": null,

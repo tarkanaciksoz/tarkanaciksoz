@@ -23,3 +23,6 @@ Homestead.json
 Homestead.yaml
 npm-debug.log
 yarn-error.log
+
+# Local browser-automation logs (Tailwind scans untracked files; a growing log reloads the dev page)
+/.playwright-cli

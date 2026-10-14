@@ -7,14 +7,14 @@ return [
     'headline' => 'Backends you can see through.',
     'intro' => 'I build and run the APIs, payments, push and AI pipelines behind mobile apps. This page traces itself.',
     'focus' => [
-        'Laravel APIs that a small team can keep alive',
+        'APIs that a small team can keep alive',
         'Turning repeated work into shared packages',
         'Moving servers without downtime',
     ],
     'links' => [
-        ['label' => 'Email', 'href' => 'mailto:hello@example.com'],
-        ['label' => 'GitHub', 'href' => 'https://github.com/'],
-        ['label' => 'LinkedIn', 'href' => 'https://www.linkedin.com/'],
+        ['label' => 'Email', 'href' => 'mailto:tarkanaciksoz@gmail.com'],
+        ['label' => 'GitHub', 'href' => 'https://github.com/tarkanaciksoz'],
+        ['label' => 'LinkedIn', 'href' => 'https://www.linkedin.com/in/tarkan-a%C3%A7%C4%B1ks%C3%B6z-5b2863208'],
         ['label' => 'API docs', 'href' => '/docs/api'],
     ],
 ];
