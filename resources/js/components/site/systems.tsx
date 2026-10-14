@@ -1,48 +1,45 @@
 import { gsap, prefersReducedMotion, ScrollTrigger, useGSAP } from '@/lib/gsap';
 import type { System } from '@/types/portfolio';
 import { useRef } from 'react';
-import { SplitReveal } from '../motion/split-reveal';
+import { DitherImage } from '../signal/dither-image';
+import { SectionHead } from './section-head';
+import { SectionState, type Loadable } from './section-state';
 
-function Panel({ system, index, total }: { system: System; index: number; total: number }) {
+function Panel({ system }: { system: System }) {
     return (
-        <article className="sys-panel pan:h-full pan:w-[min(80vw,1040px)] pan:border-t-0 pan:border-l pan:px-12 pan:py-2 relative flex w-full shrink-0 flex-col border-t border-white/12 py-10">
-            <div className="flex items-start justify-between gap-6">
-                <span className="sys-index font-pixel text-[72px] leading-none text-[#ff3b30] sm:text-[96px]">
-                    {String(index + 1).padStart(2, '0')}
-                </span>
-                <span className="mt-2 font-mono text-[11px] text-zinc-600">
-                    {index + 1} / {total}
-                </span>
-            </div>
-            <h3 className="mt-5 max-w-[22ch] text-3xl leading-[1.02] font-semibold tracking-[-0.03em] text-zinc-50 sm:text-4xl">{system.title}</h3>
-            <p className="mt-4 max-w-[58ch] text-lg text-zinc-300">{system.summary}</p>
+        <article className="sys-panel pan:h-full pan:w-[min(86vw,1240px)] pan:grid-cols-[minmax(0,5fr)_minmax(0,6fr)] pan:gap-12 pan:py-0 pan:pr-16 grid w-full shrink-0 grid-cols-[minmax(0,1fr)] gap-6 py-10">
+            {system.image ? (
+                <DitherImage src={system.image} alt={system.title} className="pan:aspect-auto pan:h-full aspect-[3/2] w-full bg-white/[0.015]" />
+            ) : (
+                <div className="pan:block hidden" />
+            )}
+            <div className="flex min-h-0 flex-col">
+                <h3 className="max-w-[20ch] text-3xl leading-[1.02] font-semibold tracking-[-0.03em] text-zinc-50 sm:text-4xl">{system.title}</h3>
+                <p className="mt-4 max-w-[52ch] text-lg leading-snug text-zinc-300">{system.summary}</p>
 
-            <dl className="sys-body mt-7 grid gap-6 border-t border-white/10 pt-6 text-[14.5px] leading-relaxed md:grid-cols-[1fr_1.35fr_1fr] md:gap-8">
-                <div>
-                    <dt className="font-mono text-[11px] tracking-[0.12em] text-zinc-500 uppercase">Problem</dt>
-                    <dd className="mt-2 text-zinc-400">{system.problem}</dd>
-                </div>
-                <div>
-                    <dt className="font-mono text-[11px] tracking-[0.12em] text-zinc-500 uppercase">How</dt>
-                    <dd className="mt-2 text-zinc-200">{system.approach}</dd>
-                </div>
-                {system.lesson && (
-                    <div>
-                        <dt className="font-mono text-[11px] tracking-[0.12em] text-zinc-500 uppercase">Learned</dt>
-                        <dd className="mt-2 text-zinc-400">{system.lesson}</dd>
-                    </div>
-                )}
-            </dl>
+                <dl className="sys-body mt-7 grid gap-x-6 gap-y-4 text-[14.5px] leading-relaxed sm:grid-cols-[84px_minmax(0,1fr)]">
+                    <dt className="font-mono text-[12px] text-zinc-500">problem</dt>
+                    <dd className="text-zinc-400">{system.problem}</dd>
+                    <dt className="font-mono text-[12px] text-zinc-500">how</dt>
+                    <dd className="text-zinc-200">{system.approach}</dd>
+                    {system.lesson && (
+                        <>
+                            <dt className="font-mono text-[12px] text-[#ff3b30]">learned</dt>
+                            <dd className="text-zinc-400">{system.lesson}</dd>
+                        </>
+                    )}
+                </dl>
 
-            <div className="mt-auto flex flex-wrap items-end justify-between gap-4 pt-8">
-                <div className="flex flex-wrap gap-1.5">
-                    {system.tags.map((tag) => (
-                        <span key={tag} className="rounded-[2px] border border-white/12 px-2 py-0.5 font-mono text-[11px] text-zinc-400">
-                            {tag}
-                        </span>
-                    ))}
+                <div className="mt-auto flex flex-wrap items-end justify-between gap-4 pt-7">
+                    <ul className="flex flex-wrap gap-1.5">
+                        {system.tags.map((tag) => (
+                            <li key={tag} className="rounded-[2px] border border-white/12 px-2 py-0.5 font-mono text-[11px] text-zinc-400">
+                                {tag}
+                            </li>
+                        ))}
+                    </ul>
+                    {system.scale && <p className="font-mono text-[12px] text-zinc-200">{system.scale}</p>}
                 </div>
-                {system.scale && <p className="font-mono text-[12px] text-zinc-200">{system.scale}</p>}
             </div>
         </article>
     );
@@ -50,12 +47,14 @@ function Panel({ system, index, total }: { system: System; index: number; total:
 
 /**
  * What I have built, as a track that pans sideways while the page scrolls
- * down. On phones the panels simply stack.
+ * down: one photograph and one problem at a time. On phones, short screens and
+ * under reduced motion the panels simply stack or scroll.
  */
-export function Systems({ systems }: { systems: System[] }) {
+export function Systems({ state }: { state: Loadable<System[]> }) {
     const root = useRef<HTMLElement>(null);
     const track = useRef<HTMLDivElement>(null);
     const bar = useRef<HTMLDivElement>(null);
+    const systems = state.data ?? [];
 
     useGSAP(
         () => {
@@ -64,7 +63,7 @@ export function Systems({ systems }: { systems: System[] }) {
 
             mm.add('(min-width: 1024px) and (min-height: 760px)', () => {
                 const el = track.current!;
-                const distance = () => Math.max(0, el.scrollWidth - el.clientWidth);
+                const distance = () => Math.max(0, el.scrollWidth - el.parentElement!.clientWidth);
 
                 const pan = gsap.to(el, {
                     x: () => -distance(),
@@ -74,24 +73,15 @@ export function Systems({ systems }: { systems: System[] }) {
                         pin: true,
                         start: 'top top',
                         end: () => `+=${distance()}`,
-                        scrub: 0.6,
+                        scrub: 1,
+                        anticipatePin: 1,
                         invalidateOnRefresh: true,
                         onUpdate: (self) => gsap.set(bar.current, { scaleX: self.progress }),
                     },
                 });
 
-                // Inside the moving track: each number slides against the panel, the body follows it in.
+                // Text follows each photograph in as its panel slides into view.
                 gsap.utils.toArray<HTMLElement>('.sys-panel', el).forEach((panel, i) => {
-                    gsap.fromTo(
-                        panel.querySelector('.sys-index'),
-                        { xPercent: 60 },
-                        {
-                            xPercent: -10,
-                            ease: 'none',
-                            scrollTrigger: { containerAnimation: pan, trigger: panel, start: 'left right', end: 'right left', scrub: true },
-                        },
-                    );
-                    // The first panel is already in place when the pin starts; only the ones that pan in are revealed.
                     if (i === 0) return;
                     gsap.from(panel.querySelector('.sys-body'), {
                         y: 30,
@@ -115,25 +105,37 @@ export function Systems({ systems }: { systems: System[] }) {
     );
 
     return (
-        <section ref={root} id="systems" className="pan:h-[100dvh] pan:pt-20 pan:pb-10 relative z-10 flex flex-col pt-24 sm:pt-32">
-            <div className="flex flex-wrap items-end justify-between gap-6">
-                <SplitReveal text="What I have built" className="text-4xl leading-[0.98] font-semibold tracking-[-0.04em] text-zinc-50 sm:text-6xl" />
-                <p className="max-w-[40ch] text-zinc-400">
-                    {systems.length} systems, and the problem each one answers. Read from{' '}
-                    <span className="font-mono text-[13px] text-zinc-200">GET /api/systems</span>.
-                </p>
-            </div>
-            <div className="pan:block mt-6 hidden h-px w-full bg-white/10">
-                <div ref={bar} className="h-px origin-left scale-x-0 bg-[#ff3b30]" />
-            </div>
-            <div className="pan:-mx-12 pan:overflow-hidden pan:pl-12 pan:motion-reduce:overflow-x-auto mt-6 min-h-0 flex-1">
-                <div ref={track} className="pan:h-full pan:flex-row flex flex-col">
-                    {systems.map((system, i) => (
-                        <Panel key={system.slug} system={system} index={i} total={systems.length} />
-                    ))}
-                    <div className="pan:block hidden w-[10vw] shrink-0" aria-hidden="true" />
+        <section ref={root} id="systems" className="pan:h-[100dvh] pan:pt-20 pan:pb-12 relative flex flex-col pt-10">
+            <SectionHead title="What I have built">
+                {systems.length ? `${systems.length} systems` : 'Systems'} and the problem each one answers, from{' '}
+                <span className="font-mono text-[13px] text-zinc-200">GET /api/systems</span>.
+            </SectionHead>
+
+            <SectionState
+                state={state}
+                endpoint="/api/systems"
+                skeleton={
+                    <div className="pan:grid-cols-[5fr_6fr] mt-10 grid gap-6">
+                        <div className="aspect-[3/2] animate-pulse bg-white/[0.03]" />
+                        <div className="space-y-3">
+                            <div className="h-9 w-2/3 animate-pulse bg-white/[0.04]" />
+                            <div className="h-4 w-full animate-pulse bg-white/[0.03]" />
+                            <div className="h-4 w-5/6 animate-pulse bg-white/[0.03]" />
+                        </div>
+                    </div>
+                }
+            >
+                <div className="pan:block mt-8 hidden h-px w-full bg-white/10">
+                    <div ref={bar} className="h-px origin-left scale-x-0 bg-[#ff3b30]" />
                 </div>
-            </div>
+                <div className="pan:-mr-12 pan:overflow-hidden pan:motion-reduce:overflow-x-auto mt-8 min-h-0 flex-1">
+                    <div ref={track} className="pan:h-full pan:w-max pan:flex-row flex flex-col">
+                        {systems.map((system) => (
+                            <Panel key={system.slug} system={system} />
+                        ))}
+                    </div>
+                </div>
+            </SectionState>
         </section>
     );
 }

@@ -7,7 +7,7 @@ const LINKS: [string, string][] = [
     ['#made', 'Machine'],
     ['#systems', 'Systems'],
     ['#rules', 'Rules'],
-    ['/docs/api', 'API'],
+    ['/docs/api', 'API docs'],
     ['#contact', 'Contact'],
 ];
 
@@ -65,7 +65,7 @@ export function Nav({ name, ready }: { name: string | null; ready: boolean }) {
     });
 
     return (
-        <header ref={bar} className="fixed inset-x-0 top-0 z-40 border-b border-white/8 bg-black/75 backdrop-blur-md">
+        <header ref={bar} className="fixed inset-x-0 top-0 z-40 border-b border-white/8 bg-[#050506]/80 backdrop-blur-md">
             <div className="mx-auto flex h-14 w-full max-w-[1600px] items-center justify-between gap-4 px-4 sm:px-8 lg:px-12">
                 <a href="#top" className="text-[15px] font-semibold tracking-tight whitespace-nowrap">
                     <span ref={nameRef} className="inline-block">
@@ -80,7 +80,7 @@ export function Nav({ name, ready }: { name: string | null; ready: boolean }) {
                             onMouseEnter={scramble}
                             className={`relative py-1 font-mono text-[12px] tracking-[0.06em] uppercase transition-colors hover:text-zinc-50 ${
                                 active === href ? 'text-zinc-50' : ''
-                            } ${href === '#rules' || href === '#contact' ? 'hidden md:inline' : ''}`}
+                            } whitespace-nowrap ${href === '#rules' || href === '#contact' ? 'hidden md:inline' : href === '/docs/api' ? 'hidden sm:inline' : ''}`}
                         >
                             <span data-label={label}>{label}</span>
                             <span

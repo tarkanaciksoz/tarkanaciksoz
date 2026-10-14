@@ -280,23 +280,10 @@ export function Terminal({ owner, intro }: { owner: string; intro: string }) {
 
     return (
         <div
-            className="scanlines relative overflow-hidden rounded-sm border border-white/12 bg-[#040405]/90 font-mono text-[12.5px] leading-[1.65] backdrop-blur-[2px]"
+            className="relative border-l border-white/15 pl-4 font-mono text-[13px] leading-[1.7] transition-colors focus-within:border-[#ff3b30]/70"
             onClick={() => inputRef.current?.focus()}
         >
-            <div className="flex items-center justify-between gap-3 border-b border-white/10 px-3 py-1.5 text-[10.5px] tracking-[0.12em] text-zinc-600 uppercase">
-                <span className="flex items-center gap-2">
-                    <span className={`h-1.5 w-1.5 ${running ? 'blink bg-[#ff3b30]' : focused ? 'bg-white' : 'bg-white/40'}`} />
-                    guest@{HOST}
-                    <span className="text-zinc-700">bash</span>
-                </span>
-                <span className="hidden gap-4 sm:flex">
-                    <span>tab complete</span>
-                    <span>↑↓ history</span>
-                    <span>ctrl+c</span>
-                </span>
-            </div>
-
-            <div ref={scrollRef} className="h-[196px] overflow-y-auto px-3 py-2 sm:h-[212px]">
+            <div ref={scrollRef} className="max-h-[188px] min-h-[84px] overflow-y-auto pr-2">
                 <div className="flex flex-wrap">
                     <PromptLabel who={owner} cwd="~" />
                     <span className="text-zinc-100">{whoami.slice(0, typed)}</span>
@@ -325,6 +312,7 @@ export function Terminal({ owner, intro }: { owner: string; intro: string }) {
                         <PromptLabel who="guest" cwd={cwd} />
                         <span className="whitespace-pre-wrap text-zinc-100">{input}</span>
                         <span className="whitespace-pre text-zinc-600">{suggestion}</span>
+                        {!input && !lines.length && !focused && <span className="ml-1 text-zinc-600">type help</span>}
                         <span
                             className={`inline-block h-[1.1em] w-[0.6em] translate-y-[0.2em] ${focused ? 'blink bg-zinc-100' : 'border border-zinc-500'}`}
                             aria-hidden="true"
@@ -340,7 +328,7 @@ export function Terminal({ owner, intro }: { owner: string; intro: string }) {
                                 type="button"
                                 onMouseDown={(e) => e.preventDefault()}
                                 onClick={() => accept(item)}
-                                className={i === menu.index ? 'bg-white px-1 text-black' : 'px-1 text-zinc-400 hover:text-white'}
+                                className={i === menu.index ? 'bg-zinc-50 px-1 text-black' : 'px-1 text-zinc-400 hover:text-white'}
                             >
                                 {item.split('/').filter(Boolean).pop()}
                                 {item.endsWith('/') ? '/' : ''}
@@ -374,7 +362,7 @@ export function Terminal({ owner, intro }: { owner: string; intro: string }) {
                 type="button"
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => openCompletion(1)}
-                className="absolute right-2 bottom-2 rounded-sm border border-white/15 px-2 py-0.5 text-[11px] text-zinc-400 sm:hidden"
+                className="absolute right-0 bottom-0 rounded-[2px] border border-white/15 px-2 py-0.5 text-[11px] text-zinc-400 sm:hidden"
                 aria-label="Complete"
             >
                 ⇥ tab

@@ -12,7 +12,7 @@ use Illuminate\Http\JsonResponse;
 
 class StackController extends Controller
 {
-    private const CACHE_KEY = 'stack:v2';
+    private const CACHE_KEY = 'stack:v3';
 
     private const TTL_SECONDS = 300;
 

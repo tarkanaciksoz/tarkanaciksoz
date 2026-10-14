@@ -27,7 +27,7 @@ class SystemController extends Controller
     {
         $cached = true;
 
-        $payload = $this->cache->remember('systems:v1', 300, function () use (&$cached) {
+        $payload = $this->cache->remember('systems:v2', 300, function () use (&$cached) {
             $cached = false;
 
             return SystemResource::collection(Tracing::call([$this->systems, 'visible']))->resolve();

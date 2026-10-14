@@ -4,6 +4,8 @@ export type StackItem = {
     usage: string | null;
     /** Services using this tool, when counted; null means not counted. */
     services: number | null;
+    /** Public path of the brand mark, or null when the tool has none. */
+    icon: string | null;
     why: string;
     instead_of: string | null;
 };
@@ -25,6 +27,8 @@ export type System = {
     lesson: string | null;
     tags: string[];
     scale: string | null;
+    /** Public path of the photograph the page dithers, or null. */
+    image: string | null;
 };
 
 export type Decision = { id: number; title: string; body: string };

@@ -3,7 +3,7 @@
 return [
     'name' => 'Tarkan Açıksöz',
     'role' => 'Backend & infrastructure engineer',
-    'location' => 'Istanbul · UTC+3',
+    'location' => 'Istanbul',
     'headline' => 'Backends you can see through.',
     'intro' => 'I build and run the APIs, payments, push and AI pipelines behind mobile apps. This page traces itself.',
     'focus' => [

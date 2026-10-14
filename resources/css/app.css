@@ -184,7 +184,18 @@
     body {
         @apply bg-background text-foreground;
     }
+
+    /* The site is dark by request: off-black, never #000, and the browser chrome agrees. */
+    html:has(#app) {
+        background: #050506;
+        color-scheme: dark;
+    }
 }
+
+/*
+  Stacking, page-wide: 0 the ambient canvas, 10 main content, 20 sticky bars inside
+  a section, 40 the fixed nav. Nothing else sets a z-index.
+*/
 
 /* ---------------------------------------------------------------------------
    Signal integrity: the page behaves like a byte stream that decodes in front

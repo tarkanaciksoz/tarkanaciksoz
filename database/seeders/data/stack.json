@@ -12,7 +12,8 @@
         "why": "Native and Flutter apps that talk to the APIs with a device token, never a login screen.",
         "instead_of": null,
         "position": 1,
-        "services": null
+        "services": null,
+        "icon": "apple"
       },
       {
         "name": "Android",
@@ -20,7 +21,8 @@
         "why": "Same device-token model. Push arrives through Firebase; purchases arrive through Google Play notifications.",
         "instead_of": null,
         "position": 2,
-        "services": null
+        "services": null,
+        "icon": "android"
       },
       {
         "name": "Web · React",
@@ -28,7 +30,8 @@
         "why": "A React 19 shell over a Laravel API for the internal control plane; public sites are server-rendered.",
         "instead_of": "Vue. Equivalent; the team already knew React.",
         "position": 3,
-        "services": null
+        "services": null,
+        "icon": "react"
       },
       {
         "name": "TV · car",
@@ -36,7 +39,8 @@
         "why": "Fire TV, Roku and CarPlay companions: a remote control cannot poll, so they hold a socket.io session.",
         "instead_of": "Polling over HTTP. Rejected: latency and battery.",
         "position": 4,
-        "services": 5
+        "services": 5,
+        "icon": null
       }
     ]
   },
@@ -53,7 +57,8 @@
         "why": "DNS and proxy in front of everything. The client learns an edge address, never the origin. Terminates TLS close to the visitor.",
         "instead_of": "Route 53 alone. Rejected: no proxy, no edge TLS.",
         "position": 1,
-        "services": null
+        "services": null,
+        "icon": "cloudflare"
       },
       {
         "name": "nginx",
@@ -61,7 +66,8 @@
         "why": "Accepts from Cloudflare, adds forwarding headers, hands the request to an Octane worker pool or PHP-FPM. Its request id becomes the trace id.",
         "instead_of": "Caddy. Fine, but nginx configs are shared with the whole fleet.",
         "position": 2,
-        "services": null
+        "services": null,
+        "icon": "nginx"
       },
       {
         "name": "CloudFront",
@@ -69,7 +75,8 @@
         "why": "Only where egress cost proved it: the two buckets that made up most of the storage bill. Roughly a hundred dollars a month saved with no app change.",
         "instead_of": "CloudFront everywhere. Rejected: most buckets do not move enough bytes.",
         "position": 3,
-        "services": null
+        "services": null,
+        "icon": null
       },
       {
         "name": "Load balancer",
@@ -77,7 +84,8 @@
         "why": "One entry point, strict TLS end to end, and a place to move traffic between machines without a DNS change.",
         "instead_of": "Public IPs behind Cloudflare, which is today. Being retired.",
         "position": 4,
-        "services": null
+        "services": null,
+        "icon": null
       }
     ]
   },
@@ -94,7 +102,8 @@
         "why": "Typed properties, enums, readonly classes and attributes. The tracer on this page is built on attributes.",
         "instead_of": null,
         "position": 1,
-        "services": 39
+        "services": 39,
+        "icon": "php"
       },
       {
         "name": "Laravel 12",
@@ -102,7 +111,8 @@
         "why": "One framework for every API, the panel and the packages. One skeleton, one deploy script, two base images. The long tail of small apps stays cheap to keep alive.",
         "instead_of": "Node or Go per service. Rejected: a one-person team cannot carry two ecosystems.",
         "position": 2,
-        "services": 39
+        "services": 39,
+        "icon": "laravel"
       },
       {
         "name": "Octane · Swoole",
@@ -110,7 +120,8 @@
         "why": "The app boots once per worker instead of once per request. Used only where traffic asks for it; the quiet apps stay on PHP-FPM, which has no long-lived state to leak.",
         "instead_of": "FrankenPHP or RoadRunner. Equivalent; Swoole was already proven here.",
         "position": 3,
-        "services": 9
+        "services": 9,
+        "icon": null
       },
       {
         "name": "Sanctum · JWT",
@@ -118,7 +129,8 @@
         "why": "Device JWTs for mobile clients, Sanctum tokens for panels. Every request is attributable and revocable without anyone seeing a login form.",
         "instead_of": "Passport. Rejected: OAuth flows the apps do not need.",
         "position": 4,
-        "services": 47
+        "services": 47,
+        "icon": "jsonwebtokens"
       },
       {
         "name": "Spatie suite",
@@ -126,7 +138,8 @@
         "why": "Permissions, translations, transformers, image handling, Slack alerts. Boring, maintained, documented. Not where I want to be original.",
         "instead_of": "Hand-rolled. Rejected on maintenance cost.",
         "position": 5,
-        "services": 44
+        "services": 44,
+        "icon": null
       },
       {
         "name": "libvips · ffmpeg",
@@ -134,7 +147,8 @@
         "why": "Images are resized and optimised on write through libvips; video goes through ffmpeg in a worker. Nothing heavy runs inside a request.",
         "instead_of": "GD and Imagick. Slower and hungrier at the sizes involved.",
         "position": 6,
-        "services": 28
+        "services": 28,
+        "icon": "ffmpeg"
       }
     ]
   },
@@ -151,7 +165,8 @@
         "why": "Text and vision behind queued workers. Every provider call is wrapped so a swap is a config change and a class, not a rewrite.",
         "instead_of": "One provider for everything. Rejected: quality and price differ per task.",
         "position": 1,
-        "services": 32
+        "services": 32,
+        "icon": null
       },
       {
         "name": "Replicate · fal",
@@ -159,7 +174,8 @@
         "why": "Hosted models for image and video generation, plus self-hosted models on RunPod cog workers where a provider was too slow or too expensive.",
         "instead_of": null,
         "position": 2,
-        "services": null
+        "services": null,
+        "icon": "replicate"
       },
       {
         "name": "ElevenLabs",
@@ -167,7 +183,8 @@
         "why": "Text to speech for the voice products, chunked and streamed to storage before the device is notified.",
         "instead_of": null,
         "position": 3,
-        "services": null
+        "services": null,
+        "icon": "elevenlabs"
       },
       {
         "name": "App Store · Google Play",
@@ -175,7 +192,8 @@
         "why": "Server notifications and receipt validation on both stores, normalised into 17 typed subscription events by one shared package.",
         "instead_of": "Trusting the client. Never.",
         "position": 4,
-        "services": 25
+        "services": 25,
+        "icon": "appstore"
       },
       {
         "name": "Adapty",
@@ -183,7 +201,8 @@
         "why": "Paywalls, experiments and store reconciliation without building them. The purchase package keeps native store notifications so the vendor stays replaceable.",
         "instead_of": "RevenueCat. Equivalent; Adapty was already in the apps.",
         "position": 5,
-        "services": 29
+        "services": 29,
+        "icon": null
       },
       {
         "name": "Firebase FCM",
@@ -191,7 +210,8 @@
         "why": "Push for every app through one notification package with a driver switch, migrated from another provider without rewriting notification classes.",
         "instead_of": "Staying on the old provider. Rejected on cost and lock-in.",
         "position": 6,
-        "services": null
+        "services": null,
+        "icon": "firebase"
       }
     ]
   },
@@ -208,15 +228,17 @@
         "why": "Per-app databases keep the blast radius small and let the control plane attach to each one. On EC2 today for cost; managed Multi-AZ is the next step once data is separated from compute.",
         "instead_of": "PostgreSQL. Fine; MySQL is what the fleet already runs.",
         "position": 1,
-        "services": null
+        "services": null,
+        "icon": "mysql"
       },
       {
         "name": "Redis",
-        "usage": "cache · sessions · hot queues",
+        "usage": "cache, sessions, hot queues",
         "why": "One shared instance on the data server so app servers can be replaced without touching state. Rate limits, cache and the hot apps' queues live here.",
         "instead_of": "Memcached. Rejected: no persistence, no queues.",
         "position": 2,
-        "services": null
+        "services": null,
+        "icon": "redis"
       },
       {
         "name": "ClickHouse",
@@ -224,7 +246,8 @@
         "why": "A read-only mirror built for aggregates. Dashboard queries went from thirty seconds on MySQL to well under one.",
         "instead_of": "MySQL read replicas. Rejected: same engine, same slow aggregates.",
         "position": 3,
-        "services": null
+        "services": null,
+        "icon": "clickhouse"
       },
       {
         "name": "PeerDB",
@@ -232,7 +255,8 @@
         "why": "Streams MySQL binlogs into ClickHouse, seconds behind, so production never runs an analytics query.",
         "instead_of": "Nightly dumps. Rejected: a day stale and heavy on the source.",
         "position": 4,
-        "services": null
+        "services": null,
+        "icon": null
       },
       {
         "name": "MinIO",
@@ -240,7 +264,8 @@
         "why": "S3-compatible object storage on the data server, used as the landing zone between PeerDB and ClickHouse.",
         "instead_of": null,
         "position": 5,
-        "services": null
+        "services": null,
+        "icon": "minio"
       },
       {
         "name": "S3",
@@ -248,7 +273,8 @@
         "why": "Every upload and every generated asset. Public reads go through CloudFront where the bill asked for it.",
         "instead_of": null,
         "position": 6,
-        "services": 24
+        "services": 24,
+        "icon": null
       }
     ]
   },
@@ -265,7 +291,8 @@
         "why": "ARM instances by default: cheaper for the same work, and every image builds for arm64. Sizes come from thirty-day graphs, not habit.",
         "instead_of": "x86. Kept only where a dependency demanded it; so far nothing has.",
         "position": 1,
-        "services": null
+        "services": null,
+        "icon": null
       },
       {
         "name": "ECS · ECR",
@@ -273,15 +300,17 @@
         "why": "Scale the app, not the server. A task has a memory limit, an out-of-memory kills the task and not the neighbours, an image is an immutable deploy.",
         "instead_of": "Fargate. Rejected at this profile: 20 to 60 percent premium over the EC2 launch type.",
         "position": 2,
-        "services": null
+        "services": null,
+        "icon": null
       },
       {
         "name": "Docker",
-        "usage": "arm64 · Alpine · Swoole",
+        "usage": "arm64, Alpine, Swoole",
         "why": "Two base images cover the fleet: PHP-FPM and Octane. Vendor is baked in at build so private packages need no credentials at runtime.",
         "instead_of": null,
         "position": 3,
-        "services": null
+        "services": null,
+        "icon": "docker"
       },
       {
         "name": "GitLab CI · Envoy",
@@ -289,7 +318,8 @@
         "why": "Release folders and a current symlink, shared .env and storage, manual production jobs from main. Every app deploys the same way, from inside the network.",
         "instead_of": "GitHub Actions. Rejected: repos, runners and secrets stay inside.",
         "position": 4,
-        "services": null
+        "services": null,
+        "icon": "gitlab"
       },
       {
         "name": "Supervisor · PM2",
@@ -297,7 +327,8 @@
         "why": "Supervisor keeps queue workers and schedulers alive for PHP; PM2 does the same for the Node socket services.",
         "instead_of": "systemd units per app. More ceremony for the same result.",
         "position": 5,
-        "services": null
+        "services": null,
+        "icon": "pm2"
       },
       {
         "name": "WireGuard",
@@ -305,7 +336,8 @@
         "why": "A Laravel API leases peers on a fleet of nodes and enforces those leases against payment events on a schedule.",
         "instead_of": "OpenVPN. Rejected: heavier, slower to provision.",
         "position": 6,
-        "services": null
+        "services": null,
+        "icon": "wireguard"
       }
     ]
   },
@@ -322,7 +354,8 @@
         "why": "Exceptions, slow routes, slow jobs and scheduled tasks per app. It is how a silent failure in the push package was found.",
         "instead_of": null,
         "position": 1,
-        "services": 26
+        "services": 26,
+        "icon": null
       },
       {
         "name": "Sentry",
@@ -330,7 +363,8 @@
         "why": "Kept where it already was. Nightwatch covers new work.",
         "instead_of": null,
         "position": 2,
-        "services": 10
+        "services": 10,
+        "icon": "sentry"
       },
       {
         "name": "Telescope",
@@ -338,7 +372,8 @@
         "why": "Enabled by default it records every scheduled task run in production. Every production .env pins it off.",
         "instead_of": null,
         "position": 3,
-        "services": null
+        "services": null,
+        "icon": null
       },
       {
         "name": "Zabbix",
@@ -346,7 +381,8 @@
         "why": "CPU, memory and disk on every EC2 with alerts to Slack. The graphs that decide instance sizes come from here.",
         "instead_of": "CloudWatch alarms. Not configured yet; on the list.",
         "position": 4,
-        "services": null
+        "services": null,
+        "icon": null
       },
       {
         "name": "Slack alerts",
@@ -354,7 +390,8 @@
         "why": "Apps post their own alerts: failed jobs, provider errors, unusual purchase events.",
         "instead_of": null,
         "position": 5,
-        "services": 29
+        "services": 29,
+        "icon": null
       },
       {
         "name": "Telegram",
@@ -362,7 +399,8 @@
         "why": "A second channel for the alerts that must wake someone up.",
         "instead_of": null,
         "position": 6,
-        "services": 19
+        "services": 19,
+        "icon": "telegram"
       }
     ]
   }

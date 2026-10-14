@@ -5,11 +5,9 @@ const stamp = (t: number) => `[${t.toFixed(3).padStart(8, ' ')}]`;
 /** dmesg-style record of what the page is doing: mounting layers, sending, reading the trace. */
 export function BootLog({ lines, live }: { lines: LogLine[]; live: boolean }) {
     return (
-        <div className="scanlines relative overflow-hidden rounded-sm border border-white/12 bg-[#040405] px-4 py-3 font-mono text-[11.5px] leading-[1.75]">
+        <div className="scanlines relative overflow-hidden rounded-[2px] border border-white/12 bg-[#040405] px-4 py-3 font-mono text-[11.5px] leading-[1.75]">
             <div className="mb-1 flex items-baseline justify-between text-[10.5px] tracking-[0.14em] text-zinc-600 uppercase">
-                <span>
-                    <span className="text-[#ff3b30]">▌</span> boot log
-                </span>
+                <span>boot log</span>
                 <span>{live ? 'running' : `${lines.length} lines`}</span>
             </div>
             <div className="min-h-[204px]">

@@ -25,7 +25,7 @@ function Bar({ steps, activeKey, onPick }: { steps: Step[]; activeKey: string; o
                     title={`${step.title}: ${ms(step.ms)} ms`}
                     onClick={() => onPick(step.key)}
                     style={{ flexGrow: Math.max(step.ms / total, 0.012) }}
-                    className={`min-w-[2px] rounded-sm transition-colors ${
+                    className={`min-w-[2px] rounded-[2px] transition-colors ${
                         step.key === activeKey
                             ? step.slow
                                 ? 'bg-[#ff3b30]'
@@ -44,14 +44,16 @@ function Code({ step }: { step: Step }) {
     if (!step.source) return null;
     const src = step.source;
     return (
-        <div className="mt-4 overflow-hidden rounded-lg border border-white/8 bg-[#08080a]">
+        <div className="mt-4 overflow-hidden rounded-[2px] border border-white/8 bg-[#08080a]">
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/8 px-3 py-2 font-mono text-[11px] text-zinc-400">
                 <span className="break-all">{src.file}</span>
                 <span className="flex items-center gap-2">
                     {src.vendor ? (
                         <span className="rounded border border-white/12 px-1.5 py-0.5 text-[10px] text-zinc-400">vendor</span>
                     ) : (
-                        src.commit && <span className="rounded-sm border border-white/25 px-1.5 py-0.5 text-[10px] text-zinc-200">{src.commit}</span>
+                        src.commit && (
+                            <span className="rounded-[2px] border border-white/25 px-1.5 py-0.5 text-[10px] text-zinc-200">{src.commit}</span>
+                        )
                     )}
                 </span>
             </div>
@@ -321,7 +323,7 @@ export function Anatomy() {
 
     return (
         <div ref={rootRef}>
-            <div className="flex flex-wrap items-center justify-between gap-4 rounded-sm border border-white/12 bg-[#050506] px-4 py-3">
+            <div className="flex flex-wrap items-center justify-between gap-4 rounded-[2px] border border-white/12 bg-[#050506] px-4 py-3">
                 <div className="min-w-0 font-mono text-[12.5px] text-zinc-400">
                     <span className={`mr-2 inline-block h-1.5 w-1.5 align-middle ${busy ? 'blink bg-[#ff3b30]' : 'bg-white/60'}`} />
                     GET <span className="text-zinc-100">/api/stack</span>
@@ -361,7 +363,7 @@ export function Anatomy() {
                         type="button"
                         onClick={run}
                         disabled={busy}
-                        className="jitter rounded-sm bg-white px-4 py-2 font-mono text-[12px] tracking-[0.08em] text-black uppercase transition-colors hover:bg-[#ff3b30] disabled:opacity-40"
+                        className="jitter rounded-[2px] bg-zinc-50 px-4 py-2 font-mono text-[12px] tracking-[0.08em] text-black uppercase transition-colors hover:bg-[#ff3b30] disabled:opacity-40"
                     >
                         {status === 'waiting' ? 'Build and send' : busy ? (playing ? 'Replaying…' : 'Working…') : 'Rebuild and send'}
                     </button>
@@ -381,7 +383,7 @@ export function Anatomy() {
                             <span className="font-mono text-sm text-zinc-500">ms{playing ? ', replaying' : trace ? ' end to end' : ''}</span>
                         </div>
                         <span
-                            className={`rounded-sm px-1.5 py-0.5 font-mono text-[10.5px] tracking-[0.14em] uppercase ${
+                            className={`rounded-[2px] px-1.5 py-0.5 font-mono text-[10.5px] tracking-[0.14em] uppercase ${
                                 cache === 'miss' ? 'bg-[#ff3b30] text-black' : 'border border-white/20 text-zinc-300'
                             }`}
                         >
@@ -391,7 +393,7 @@ export function Anatomy() {
 
                     {tower('mx-auto max-h-[56vh] w-full')}
 
-                    <div className="mt-2 min-h-[72px] rounded-sm border border-white/10 bg-white/[0.02] px-4 py-3">
+                    <div className="mt-2 min-h-[72px] rounded-[2px] border border-white/10 bg-white/[0.02] px-4 py-3">
                         {active ? (
                             <>
                                 <div className="flex items-baseline justify-between gap-3">
@@ -411,7 +413,7 @@ export function Anatomy() {
 
                     {trace && active && (
                         <div className="mt-3">
-                            <div className="mb-2 font-mono text-[11px] tracking-[0.12em] text-zinc-500 uppercase">Where the time went</div>
+                            <div className="mb-2 font-mono text-[12px] text-zinc-500">where the time went</div>
                             <Bar
                                 steps={steps}
                                 activeKey={active.key}
@@ -424,7 +426,7 @@ export function Anatomy() {
                         </div>
                     )}
                     {raw && (
-                        <div className="scanlines relative mt-4 overflow-hidden rounded-sm border border-white/10 bg-[#050506] p-3">
+                        <div className="scanlines relative mt-4 overflow-hidden rounded-[2px] border border-white/10 bg-[#050506] p-3">
                             <div className="mb-2 flex items-baseline justify-between gap-3 font-mono text-[10.5px] tracking-[0.12em] text-zinc-500 uppercase">
                                 <span>response body, {new TextEncoder().encode(raw).length.toLocaleString()} bytes</span>
                                 <span>
@@ -436,7 +438,7 @@ export function Anatomy() {
                     )}
                 </div>
 
-                <div className="sticky top-14 z-20 -mx-4 border-b border-white/8 bg-black/90 px-4 pt-3 pb-3 backdrop-blur lg:hidden">
+                <div className="sticky top-14 z-20 -mx-4 border-b border-white/8 bg-[#050506]/90 px-4 pt-3 pb-3 backdrop-blur lg:hidden">
                     <div className="flex items-baseline justify-between gap-3">
                         <span className="font-mono text-2xl font-medium text-zinc-50 tabular-nums">
                             {ms(shown)} <span className="text-sm text-zinc-500">ms{playing ? ', replaying' : ''}</span>
@@ -464,11 +466,7 @@ export function Anatomy() {
                             }`}
                             style={{ animationDelay: `${Math.min(i, 12) * 40}ms` }}
                         >
-                            <div className="flex flex-wrap items-baseline gap-2 font-mono text-[11px] tracking-[0.12em] uppercase">
-                                <span className="text-zinc-500">{LAYERS.find((l) => l.id === step.layer)?.name}</span>
-                                {step.depth > 0 && <span className="text-zinc-600">nested</span>}
-                            </div>
-                            <h3 className="mt-3 flex flex-wrap items-baseline gap-3 text-xl leading-tight font-medium text-zinc-50 sm:text-2xl">
+                            <h3 className="flex flex-wrap items-baseline gap-3 text-xl leading-tight font-medium text-zinc-50 sm:text-2xl">
                                 <span className={step.slow ? 'split' : ''} data-text={step.title}>
                                     {step.title}
                                 </span>
@@ -476,10 +474,14 @@ export function Anatomy() {
                                     <DigitRoll value={step.ms} format={ms} /> ms{step.slow && ', slowest'}
                                 </span>
                             </h3>
+                            <div className="mt-1.5 font-mono text-[12px] text-zinc-500">
+                                {LAYERS.find((l) => l.id === step.layer)?.name.toLowerCase()}
+                                {step.depth > 0 && ', nested'}
+                            </div>
                             <p className="mt-3 text-zinc-200">{step.detail}</p>
 
                             {step.sql && (
-                                <pre className="mt-4 overflow-x-auto rounded-sm border border-white/8 bg-[#08080a] px-4 py-3 font-mono text-[12px] leading-relaxed text-zinc-200">
+                                <pre className="mt-4 overflow-x-auto rounded-[2px] border border-white/8 bg-[#08080a] px-4 py-3 font-mono text-[12px] leading-relaxed text-zinc-200">
                                     {step.sql}
                                 </pre>
                             )}
@@ -514,7 +516,7 @@ export function Anatomy() {
                             )}
 
                             {step.kind === 'gap' && (
-                                <div className="relative mt-4 h-16 overflow-hidden rounded-sm border border-white/10 bg-black">
+                                <div className="relative mt-4 h-16 overflow-hidden rounded-[2px] border border-white/10 bg-[#050506]">
                                     <NoiseField className="absolute inset-0 h-full w-full" density={0.08 + unattributedShare * 0.5} />
                                     <span className="absolute bottom-1.5 left-2 font-mono text-[10.5px] tracking-[0.12em] text-zinc-400 uppercase">
                                         {Math.round(unattributedShare * 100)}% of server time no span claimed
@@ -523,10 +525,10 @@ export function Anatomy() {
                             )}
 
                             {step.why && (
-                                <div className="mt-5 border-l-2 border-white/20 py-1 pl-4">
-                                    <div className="font-mono text-[10.5px] tracking-[0.14em] text-[#ff3b30] uppercase">Why</div>
-                                    <p className="mt-1.5 text-[15px] text-zinc-400">{step.why}</p>
-                                </div>
+                                <p className="mt-5 border-l-2 border-[#ff3b30]/60 py-1 pl-4 text-[15px] text-zinc-400">
+                                    <span className="mr-2 font-mono text-[12px] text-[#ff3b30]">why</span>
+                                    {step.why}
+                                </p>
                             )}
 
                             <Code step={step} />

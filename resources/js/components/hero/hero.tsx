@@ -1,13 +1,14 @@
 import { ms } from '@/lib/api';
 import { gsap, prefersReducedMotion, useGSAP } from '@/lib/gsap';
 import type { Profile } from '@/types/portfolio';
+import { ArrowDown, ArrowUpRight } from '@phosphor-icons/react';
 import { useRef } from 'react';
 import { SplitReveal } from '../motion/split-reveal';
 import { Terminal } from '../terminal/terminal';
 import { GlassCanvas } from './glass-canvas';
 import type { SceneLayer } from './glass-scene';
 
-export type HeroRequest = { status: number; serverMs: number; cache: string | null };
+export type HeroRequest = { status: number; serverMs: number; cache: string | null } | 'failed';
 
 /**
  * First screen: who, what, two ways in, and the request that drew the page,
@@ -40,9 +41,9 @@ export function Hero({ profile, layers, request }: { profile: Profile | null; la
         <section
             ref={root}
             id="top"
-            className="relative grid min-h-[calc(100dvh-3.5rem)] grid-cols-[minmax(0,1fr)] gap-8 pt-10 pb-16 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] lg:items-center lg:gap-4 lg:pt-4 lg:pb-10"
+            className="relative grid min-h-[calc(100dvh-3.5rem)] grid-cols-[minmax(0,1fr)] gap-8 pt-10 pb-16 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] lg:items-center lg:gap-0 lg:pt-4 lg:pb-10"
         >
-            <div data-hero="copy" className="relative z-10 min-w-0">
+            <div data-hero="copy" className="relative min-w-0">
                 {profile ? (
                     <SplitReveal
                         as="h1"
@@ -64,45 +65,44 @@ export function Hero({ profile, layers, request }: { profile: Profile | null; la
                 <div data-hero="cta" className="mt-9 flex flex-wrap gap-3">
                     <a
                         href="#made"
-                        className="jitter rounded-[2px] bg-white px-5 py-3 font-mono text-[12.5px] tracking-[0.08em] whitespace-nowrap text-black uppercase transition-colors hover:bg-[#ff3b30] active:translate-y-px"
+                        className="jitter group inline-flex items-center gap-2.5 rounded-[2px] bg-zinc-50 px-5 py-3 font-mono text-[12.5px] tracking-[0.08em] whitespace-nowrap text-black uppercase transition-colors hover:bg-[#ff3b30] active:translate-y-px"
                     >
                         Watch a request
+                        <ArrowDown size={14} weight="bold" className="transition-transform duration-300 group-hover:translate-y-0.5" />
                     </a>
                     <a
                         href="/docs/api"
-                        className="jitter rounded-[2px] border border-white/25 px-5 py-3 font-mono text-[12.5px] tracking-[0.08em] whitespace-nowrap text-zinc-100 uppercase transition-colors hover:border-white active:translate-y-px"
+                        className="jitter group inline-flex items-center gap-2.5 rounded-[2px] border border-white/25 px-5 py-3 font-mono text-[12.5px] tracking-[0.08em] whitespace-nowrap text-zinc-100 uppercase transition-colors hover:border-white active:translate-y-px"
                     >
-                        Read the API
+                        API docs
+                        <ArrowUpRight
+                            size={14}
+                            weight="bold"
+                            className="transition-transform duration-300 group-hover:translate-x-0.5 group-hover:-translate-y-0.5"
+                        />
                     </a>
                 </div>
-                <div data-hero="term" className="mt-12 max-w-2xl">
+                <div data-hero="term" className="mt-12 max-w-xl">
                     <Terminal owner="tarkan" intro={`${profile?.role ?? 'Backend & infrastructure engineer'}, ${profile?.location ?? 'Istanbul'}`} />
                 </div>
             </div>
 
-            <div className="relative min-w-0">
-                <GlassCanvas layers={layers} className="h-[48vh] min-h-[320px] w-full lg:h-[min(76vh,720px)]" />
-                <div
-                    data-hero="caption"
-                    className="mt-2 flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 font-mono text-[11.5px] text-zinc-500"
-                >
-                    <span className="flex flex-wrap gap-x-4">
-                        <span className="text-zinc-200">GET /api/stack</span>
-                        {request ? (
-                            <>
-                                <span>{request.status}</span>
-                                <span>
-                                    <span className="text-zinc-200">{ms(request.serverMs)} ms</span> at the server
-                                </span>
-                                <span>cache {request.cache ?? 'n/a'}</span>
-                            </>
-                        ) : (
-                            <span>reading the trace</span>
-                        )}
-                    </span>
-                    <span>The request that drew this page, layer by layer.</span>
-                </div>
-            </div>
+            {/* The box bleeds to the right edge of the window; the copy keeps the grid. */}
+            <figure className="relative min-w-0 lg:-mr-12">
+                <GlassCanvas layers={layers} className="h-[48vh] min-h-[320px] w-full lg:h-[min(72vh,700px)]" />
+                <figcaption data-hero="caption" className="mt-2 font-mono text-[12px] text-zinc-500">
+                    {request === 'failed' ? (
+                        'The trace for this page could not be read.'
+                    ) : request ? (
+                        <>
+                            The request that drew this page: <span className="text-zinc-200">GET /api/stack</span>,{' '}
+                            <span className="text-zinc-200">{ms(request.serverMs)} ms</span> at the server, cache {request.cache ?? 'n/a'}.
+                        </>
+                    ) : (
+                        'Reading the trace of the request that drew this page.'
+                    )}
+                </figcaption>
+            </figure>
         </section>
     );
 }

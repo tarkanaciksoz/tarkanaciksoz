@@ -35,6 +35,7 @@ class PortfolioSeeder extends Seeder
                     [
                         'usage' => $item['usage'],
                         'services' => $item['services'] ?? null,
+                        'icon' => isset($item['icon']) ? "/icons/stack/{$item['icon']}.svg" : null,
                         'why' => $item['why'],
                         'instead_of' => $item['instead_of'],
                         'position' => $item['position'],
@@ -66,7 +67,7 @@ class PortfolioSeeder extends Seeder
                 'approach' => 'A driver switch in the environment file. One target abstraction maps a device id to either a tag filter or a topic. Device tokens are imported in resumable batches of 500; the OAuth token refreshes five minutes before its one-hour expiry, because an hour-long import once died at minute sixty. Topic sync retries on a queue with backoff, and "not found" on unsubscribe counts as success.',
                 'lesson' => 'Any call that can fail quietly should fail loudly in one place. The silent unsubscribe was found by an exception tracker, not by a user.',
                 'tags' => ['FCM', 'token import', 'queued sync', 'Pest'],
-                'scale' => 'v1.0 to v1.5 in 15 days · 3 apps live · 12 integrations open',
+                'scale' => 'v1.0 to v1.5 in 15 days, 3 apps live, 12 integrations open',
             ],
             [
                 'slug' => 'ai-media',
@@ -96,7 +97,7 @@ class PortfolioSeeder extends Seeder
                 'approach' => 'A Laravel API switches its default database connection per request from an application-context middleware, and reads the fleet through shared databases rather than HTTP. A React shell in front. Store keys, push credentials and ad-platform tokens are managed per app here and materialised into deployments.',
                 'lesson' => 'Credentials that live as file paths break the moment the app is containerised. They are fetched from a bucket at boot now, and a missing file fails the boot instead of the first push.',
                 'tags' => ['Laravel', 'React', 'Sanctum', 'per-request connections'],
-                'scale' => '13 apps · 1 codebase · 0 HTTP calls between panel and fleet',
+                'scale' => '13 apps, 1 codebase, 0 HTTP calls between panel and fleet',
             ],
             [
                 'slug' => 'skeleton',
@@ -131,6 +132,10 @@ class PortfolioSeeder extends Seeder
         ];
 
         foreach ($systems as $i => $system) {
+            // A photograph only when the file is really there; the page draws none otherwise.
+            $image = "/images/systems/{$system['slug']}.jpg";
+            $system['image'] = file_exists(public_path($image)) ? $image : null;
+
             System::updateOrCreate(['slug' => $system['slug']], $system + ['position' => $i + 1, 'visible' => true]);
         }
     }

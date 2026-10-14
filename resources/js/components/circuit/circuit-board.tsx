@@ -1,5 +1,6 @@
 import { prefersReducedMotion, ScrollTrigger } from '@/lib/gsap';
 import type { Flow, StackItem, StackLayer } from '@/types/portfolio';
+import { X } from '@phosphor-icons/react';
 import { animate, createDrawable, createMotionPath, createTimeline, stagger, utils } from 'animejs';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Scramble } from '../motion/scramble';
@@ -12,10 +13,11 @@ const HOLD = 2800;
 type Step = { box: ChipBox; item: StackItem; note: string; hot: boolean };
 
 /**
- * The stack as a circuit board. Every tool is a chip; a scenario is a signal
- * routed through the chips it really touches, in order, with the reason for each
- * hop in the log beside it. Scenarios play on their own once the board is on
- * screen; picking one, or a chip, hands control to the visitor.
+ * The stack as a circuit board. Every tool is a chip carrying its own mark; a
+ * scenario is a signal routed through the chips it really touches, in order,
+ * with the reason for each hop on the console line under the board. Scenarios
+ * play on their own once the board is on screen; picking one, or a chip, hands
+ * control to the visitor.
  */
 export function CircuitBoard({ layers, flows }: { layers: StackLayer[]; flows: Flow[] }) {
     const chips = useMemo(() => placeChips(layers), [layers]);
@@ -122,19 +124,91 @@ export function CircuitBoard({ layers, flows }: { layers: StackLayer[]; flows: F
 
     const play = useCallback((index: number) => {
         setAuto(false);
+        setPicked(null);
         setFlowIndex(index);
         setRun((r) => r + 1);
     }, []);
 
     const pickedEntry = picked !== null ? byId.get(picked) : null;
+    const pickedBox = picked !== null ? chips.get(picked) : null;
     const pickedFlows = picked !== null ? flows.map((f, i) => ({ f, i })).filter(({ f }) => f.steps.some((s) => s.item_id === picked)) : [];
 
     if (!flow) return null;
 
+    const detail = pickedEntry && (
+        <>
+            <div className="flex items-baseline justify-between gap-3">
+                <span className="text-[17px] font-medium text-zinc-50">
+                    <Scramble key={pickedEntry.item.id} text={pickedEntry.item.name} duration={0.4} />
+                </span>
+                <button type="button" onClick={() => setPicked(null)} className="text-zinc-500 hover:text-zinc-100" aria-label="Close">
+                    <X size={16} weight="light" />
+                </button>
+            </div>
+            <div className="mt-0.5 font-mono text-[11.5px] text-zinc-500">
+                {pickedEntry.layer.name}, {pickedEntry.item.services !== null ? `used by ${pickedEntry.item.services} services` : 'not counted'}
+            </div>
+            <p className="mt-3 text-[14px] leading-relaxed text-zinc-300">{pickedEntry.item.why}</p>
+            {pickedEntry.item.instead_of && (
+                <p className="mt-2 text-[13px] text-zinc-500">
+                    <span className="text-zinc-300">Instead of</span> {pickedEntry.item.instead_of}
+                </p>
+            )}
+            <div className="mt-4 flex flex-wrap gap-1.5">
+                {pickedFlows.length ? (
+                    pickedFlows.map(({ f, i }) => (
+                        <button
+                            key={f.slug}
+                            type="button"
+                            onClick={() => play(i)}
+                            className="rounded-[2px] border border-white/20 px-2 py-0.5 text-[12.5px] text-zinc-300 transition-colors hover:border-white hover:text-zinc-50"
+                        >
+                            {f.title}
+                        </button>
+                    ))
+                ) : (
+                    <span className="font-mono text-[11.5px] text-zinc-600">in no scenario yet</span>
+                )}
+            </div>
+        </>
+    );
+
+    // The detail opens beside the chip, flipping to stay inside the board.
+    const popover = pickedBox
+        ? {
+              ...(pickedBox.x > BOARD.w * 0.62
+                  ? { right: `${((BOARD.w - pickedBox.x - CHIP.w) / BOARD.w) * 100}%` }
+                  : { left: `${(pickedBox.x / BOARD.w) * 100}%` }),
+              ...(pickedBox.y > BOARD.h * 0.55
+                  ? { bottom: `${((BOARD.h - pickedBox.y + 10) / BOARD.h) * 100}%` }
+                  : { top: `${((pickedBox.y + CHIP.h + 10) / BOARD.h) * 100}%` }),
+          }
+        : null;
+
     return (
-        <div ref={rootRef} className="grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start xl:gap-10">
+        <div ref={rootRef}>
+            <div role="tablist" aria-label="Scenarios" className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:px-0">
+                {flows.map((f, i) => (
+                    <button
+                        key={f.slug}
+                        type="button"
+                        role="tab"
+                        aria-selected={i === flowIndex}
+                        onClick={() => play(i)}
+                        className={`shrink-0 rounded-[2px] border px-3.5 py-2 text-[14px] transition-colors active:translate-y-px ${
+                            i === flowIndex
+                                ? 'border-zinc-50 bg-zinc-50 text-black'
+                                : 'border-white/15 text-zinc-400 hover:border-white/40 hover:text-zinc-100'
+                        }`}
+                    >
+                        {f.title}
+                    </button>
+                ))}
+            </div>
+            <p className="mt-4 max-w-[70ch] text-zinc-400">{flow.summary}</p>
+
             {/* Board: desktop */}
-            <div className="relative hidden min-w-0 overflow-hidden rounded-[2px] border border-white/12 bg-[#040405]/80 lg:block">
+            <div className="relative mt-6 hidden overflow-hidden rounded-[2px] border border-white/12 bg-[#040405]/80 lg:block">
                 <svg
                     ref={svgRef}
                     viewBox={`0 0 ${BOARD.w} ${BOARD.h}`}
@@ -154,7 +228,7 @@ export function CircuitBoard({ layers, flows }: { layers: StackLayer[]; flows: F
                         </filter>
                     </defs>
 
-                    <rect width={BOARD.w} height={BOARD.h} fill="url(#cbDots)" />
+                    <rect width={BOARD.w} height={BOARD.h} fill="url(#cbDots)" onClick={() => setPicked(null)} />
 
                     {layers.map((layer, r) => (
                         <g key={layer.slug}>
@@ -251,40 +325,21 @@ export function CircuitBoard({ layers, flows }: { layers: StackLayer[]; flows: F
                                                 fill="#040405"
                                                 stroke={seen ? 'rgba(255,255,255,.6)' : 'rgba(255,255,255,.25)'}
                                             />
+                                            <ChipMark item={item} isCurrent={isCurrent} seen={seen} />
                                             {isCurrent && (
                                                 <>
-                                                    <text
-                                                        x="13"
-                                                        y="26"
-                                                        style={{ fill: '#ff3b30', fontSize: 11.5, fontWeight: 500 }}
-                                                        className="la-ghost"
-                                                    >
-                                                        {item.name}
-                                                    </text>
-                                                    <text
-                                                        x="15"
-                                                        y="26"
-                                                        style={{ fill: '#22d3ee', fontSize: 11.5, fontWeight: 500 }}
-                                                        className="la-ghost"
-                                                    >
-                                                        {item.name}
-                                                    </text>
+                                                    <ChipName name={item.name} x={33} fill="#ff3b30" className="la-ghost" />
+                                                    <ChipName name={item.name} x={35} fill="#22d3ee" className="la-ghost" />
                                                 </>
                                             )}
-                                            <text
-                                                x="14"
-                                                y="26"
-                                                style={{ fill: isCurrent ? '#000' : seen ? '#fafafa' : '#a1a1aa', fontSize: 11.5, fontWeight: 500 }}
-                                            >
-                                                {item.name}
-                                            </text>
+                                            <ChipName name={item.name} x={34} fill={isCurrent ? '#09090b' : seen ? '#fafafa' : '#a1a1aa'} />
                                             {item.services !== null && (
                                                 <text
                                                     x={CHIP.w - 7}
                                                     y="12"
                                                     textAnchor="end"
                                                     style={{
-                                                        fill: isCurrent ? '#000' : '#ff3b30',
+                                                        fill: isCurrent ? '#09090b' : '#ff3b30',
                                                         fontSize: 9,
                                                         fontFamily: 'Geist Mono, ui-monospace, monospace',
                                                     }}
@@ -304,147 +359,133 @@ export function CircuitBoard({ layers, flows }: { layers: StackLayer[]; flows: F
                         <rect x="-3.5" y="-3.5" width="7" height="7" fill="#fff" />
                     </g>
                 </svg>
-                <div className="flex items-center justify-between border-t border-white/10 px-4 py-2 font-mono text-[10.5px] text-zinc-600">
-                    <span>
-                        chips = tools · <span className="text-[#ff3b30]">red number</span> = services using it · dim = not in this scenario
-                    </span>
-                    <span>{auto ? 'autoplay' : 'manual'}</span>
-                </div>
+                {pickedEntry && popover && (
+                    <div
+                        className="absolute w-[340px] border border-[#ff3b30]/60 bg-[#09090b]/95 p-4 backdrop-blur"
+                        style={popover}
+                        role="dialog"
+                        aria-label={pickedEntry.item.name}
+                    >
+                        {detail}
+                    </div>
+                )}
             </div>
 
             {/* Pipeline: phones and tablets */}
-            <div className="min-w-0 lg:hidden">
-                <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-3">
-                    {flows.map((f, i) => (
-                        <button
-                            key={f.slug}
-                            type="button"
-                            onClick={() => play(i)}
-                            className={`shrink-0 rounded-[2px] border px-2.5 py-1.5 text-[12.5px] ${
-                                i === flowIndex ? 'border-white bg-white text-black' : 'border-white/15 text-zinc-300'
-                            }`}
+            <ol className="relative mt-6 border-l border-white/15 pl-5 lg:hidden">
+                {steps.map((s, i) => {
+                    const state = i < hop ? 'past' : i === hop ? 'now' : 'next';
+                    return (
+                        <li
+                            key={`${flow.slug}${i}`}
+                            className={`relative pb-4 transition-opacity ${state === 'next' ? 'opacity-40' : 'opacity-100'}`}
                         >
-                            {f.title}
-                        </button>
-                    ))}
-                </div>
-                <ol className="relative mt-2 border-l border-white/15 pl-5">
-                    {steps.map((s, i) => {
-                        const state = i < hop ? 'past' : i === hop ? 'now' : 'next';
-                        return (
-                            <li
-                                key={`${flow.slug}${i}`}
-                                className={`relative pb-4 transition-opacity ${state === 'next' ? 'opacity-40' : 'opacity-100'}`}
-                            >
-                                <span
-                                    className={`absolute top-1.5 -left-[25px] h-2 w-2 ${
-                                        state === 'now'
-                                            ? (s.hot ? 'bg-[#ff3b30]' : 'bg-white') + ' shadow-[0_0_10px_#fff]'
-                                            : state === 'past'
-                                              ? 'bg-white/60'
-                                              : 'bg-white/15'
-                                    }`}
-                                />
-                                <div className={`text-[15px] font-medium ${s.hot ? 'text-[#ff3b30]' : 'text-zinc-100'}`}>{s.item.name}</div>
-                                <div className="text-[13.5px] text-zinc-400">{s.note}</div>
-                            </li>
-                        );
-                    })}
-                </ol>
-            </div>
-
-            {/* Panel: scenarios, the hop log, a chip's reasoning */}
-            <aside className="min-w-0 lg:sticky lg:top-20">
-                <div className="hidden lg:block">
-                    <div className="mb-2 font-mono text-[10.5px] tracking-[0.14em] text-zinc-500 uppercase">Scenarios · GET /api/flows</div>
-                    <ol className="border-t border-white/10">
-                        {flows.map((f, i) => (
-                            <li key={f.slug}>
-                                <button
-                                    type="button"
-                                    onClick={() => play(i)}
-                                    className={`jitter flex w-full items-baseline gap-3 border-b border-white/10 py-2 text-left text-[14px] transition-colors ${
-                                        i === flowIndex ? 'text-white' : 'text-zinc-500 hover:text-zinc-200'
-                                    }`}
-                                >
-                                    <span className={`font-mono text-[10.5px] ${i === flowIndex ? 'text-[#ff3b30]' : 'text-zinc-700'}`}>
-                                        {String(i + 1).padStart(2, '0')}
-                                    </span>
-                                    <span className="min-w-0 flex-1">{f.title}</span>
-                                    {i === flowIndex && <span className="blink h-2 w-2 shrink-0 bg-[#ff3b30]" />}
-                                </button>
-                            </li>
-                        ))}
-                    </ol>
-                </div>
-
-                <div className="scanlines relative mt-5 overflow-hidden rounded-[2px] border border-white/12 bg-[#040405] px-4 py-3 font-mono text-[11.5px] leading-[1.7]">
-                    <div className="mb-1 flex items-baseline justify-between text-[10.5px] tracking-[0.14em] text-zinc-600 uppercase">
-                        <span>
-                            <span className="text-[#ff3b30]">▌</span> {flow.slug}
-                        </span>
-                        <button type="button" onClick={() => play(flowIndex)} className="jitter text-zinc-500 hover:text-white">
-                            replay
-                        </button>
-                    </div>
-                    <p className="mb-2 font-sans text-[13px] text-zinc-400">{flow.summary}</p>
-                    {steps.map((s, i) => (
-                        <div key={`${flow.slug}${i}`} className={`flex gap-2 ${i > hop ? 'opacity-30' : ''}`}>
-                            <span className="shrink-0 text-zinc-700">{String(i).padStart(2, '0')}</span>
-                            <span className={`shrink-0 ${s.hot ? 'text-[#ff3b30]' : i === hop ? 'text-white' : 'text-zinc-300'}`}>{s.item.name}</span>
-                        </div>
-                    ))}
-                    {current && (
-                        <div className="mt-2 border-t border-white/10 pt-2 font-sans text-[13.5px] leading-snug text-zinc-200">
-                            <Scramble key={`${flow.slug}${hop}${run}`} text={current.note} duration={0.5} />
-                        </div>
-                    )}
-                </div>
-
-                {pickedEntry && (
-                    <div className="mt-5 rounded-[2px] border border-[#ff3b30]/50 bg-[#050506] p-4">
-                        <div className="flex items-baseline justify-between gap-3">
-                            <span className="text-[16px] font-medium text-zinc-50">
-                                <Scramble key={pickedEntry.item.id} text={pickedEntry.item.name} duration={0.4} />
-                            </span>
-                            <button
-                                type="button"
-                                onClick={() => setPicked(null)}
-                                className="font-mono text-[11px] text-zinc-500 hover:text-white"
-                                aria-label="Close"
-                            >
-                                ×
+                            <span
+                                className={`absolute top-1.5 -left-[25px] h-2 w-2 ${
+                                    state === 'now' ? (s.hot ? 'bg-[#ff3b30]' : 'bg-zinc-50') : state === 'past' ? 'bg-white/60' : 'bg-white/15'
+                                }`}
+                            />
+                            <button type="button" onClick={() => setPicked(s.item.id)} className="text-left">
+                                <span className={`block text-[15px] font-medium ${s.hot ? 'text-[#ff3b30]' : 'text-zinc-100'}`}>{s.item.name}</span>
+                                <span className="block text-[13.5px] text-zinc-400">{s.note}</span>
                             </button>
-                        </div>
-                        <div className="mt-0.5 font-mono text-[10.5px] text-zinc-500">
-                            {pickedEntry.layer.name.toLowerCase()} ·{' '}
-                            {pickedEntry.item.services !== null ? `${pickedEntry.item.services} services` : 'not counted'}
-                        </div>
-                        <p className="mt-2 text-[13.5px] text-zinc-300">{pickedEntry.item.why}</p>
-                        {pickedEntry.item.instead_of && (
-                            <p className="mt-2 text-[12.5px] text-zinc-500">
-                                <span className="text-zinc-300">Instead of:</span> {pickedEntry.item.instead_of}
-                            </p>
-                        )}
-                        <div className="mt-3 flex flex-wrap gap-1.5">
-                            {pickedFlows.length ? (
-                                pickedFlows.map(({ f, i }) => (
-                                    <button
-                                        key={f.slug}
-                                        type="button"
-                                        onClick={() => play(i)}
-                                        className="jitter rounded-[2px] border border-white/20 px-2 py-0.5 font-mono text-[11px] text-zinc-300 hover:border-white"
-                                    >
-                                        ▸ {f.slug}
-                                    </button>
-                                ))
-                            ) : (
-                                <span className="font-mono text-[11px] text-zinc-600">not in any scenario yet</span>
-                            )}
-                        </div>
-                    </div>
-                )}
-            </aside>
+                        </li>
+                    );
+                })}
+            </ol>
+            {pickedEntry && <div className="mt-2 border border-[#ff3b30]/60 p-4 lg:hidden">{detail}</div>}
+
+            {/* Console: where the signal is, and why */}
+            <div className="mt-4 grid gap-2 border-t border-white/10 pt-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-baseline lg:gap-8">
+                <p className="min-w-0 text-[15px] text-zinc-300">
+                    {current ? (
+                        <>
+                            <span className="mr-3 font-mono text-[12px] text-zinc-600 tabular-nums">
+                                {hop + 1}/{steps.length}
+                            </span>
+                            <span className={`mr-2 font-medium ${current.hot ? 'text-[#ff3b30]' : 'text-zinc-50'}`}>{current.item.name}</span>
+                            <Scramble key={`${flow.slug}${hop}${run}`} text={current.note} duration={0.5} />
+                        </>
+                    ) : (
+                        <span className="text-zinc-500">The signal starts when the board is on screen.</span>
+                    )}
+                </p>
+                <div className="flex items-baseline gap-6 font-mono text-[12px] text-zinc-500">
+                    <span className="hidden lg:inline">
+                        <span className="text-[#ff3b30]">red numbers</span> count the services using a tool
+                    </span>
+                    <button
+                        type="button"
+                        onClick={() => play(flowIndex)}
+                        className="jitter text-zinc-100 underline decoration-white/30 underline-offset-4"
+                    >
+                        Replay
+                    </button>
+                </div>
+            </div>
         </div>
+    );
+}
+
+function monogram(name: string): string {
+    return name
+        .replace(/[^A-Za-z0-9 ]/g, ' ')
+        .split(/\s+/)
+        .filter(Boolean)
+        .map((w) => w[0])
+        .join('')
+        .slice(0, 2)
+        .toUpperCase();
+}
+
+/** The tool's own mark when it has one, a two-letter monogram when it does not. */
+function ChipMark({ item, isCurrent, seen }: { item: StackItem; isCurrent: boolean; seen: boolean }) {
+    const y = CHIP.h / 2 - 7;
+    if (item.icon) {
+        return (
+            <image
+                href={item.icon}
+                x="12"
+                y={y}
+                width="14"
+                height="14"
+                opacity={isCurrent ? 1 : seen ? 0.95 : 0.6}
+                style={isCurrent ? { filter: 'invert(1)' } : undefined}
+            />
+        );
+    }
+    return (
+        <g opacity={isCurrent ? 1 : seen ? 0.9 : 0.55}>
+            <rect x="12.5" y={y + 0.5} width="13" height="13" fill="none" stroke={isCurrent ? '#09090b' : 'rgba(255,255,255,.5)'} />
+            <text
+                x="19"
+                y={y + 9.6}
+                textAnchor="middle"
+                style={{ fill: isCurrent ? '#09090b' : '#d4d4d8', fontSize: 6.5, fontFamily: 'Geist Mono, ui-monospace, monospace' }}
+            >
+                {monogram(item.name)}
+            </text>
+        </g>
+    );
+}
+
+/** Long names break at their separator onto two lines, so nothing runs off the chip. */
+function ChipName({ name, x, fill, className }: { name: string; x: number; fill: string; className?: string }) {
+    const parts = name.length > 14 && name.includes(' · ') ? name.split(' · ') : [name];
+    const style = { fill, fontSize: parts.length > 1 ? 10.5 : 11.5, fontWeight: 500 };
+    if (parts.length === 1) {
+        return (
+            <text x={x} y="25.5" style={style} className={className}>
+                {name}
+            </text>
+        );
+    }
+    return (
+        <text x={x} y="18.5" style={style} className={className}>
+            <tspan x={x}>{parts[0]}</tspan>
+            <tspan x={x} dy="12">
+                {parts.slice(1).join(' · ')}
+            </tspan>
+        </text>
     );
 }

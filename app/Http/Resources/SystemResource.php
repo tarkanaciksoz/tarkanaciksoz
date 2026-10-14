@@ -10,7 +10,7 @@ use Illuminate\Http\Resources\Json\JsonResource;
 class SystemResource extends JsonResource
 {
     /**
-     * @return array{slug:string, title:string, summary:string, problem:string, approach:string, lesson:string|null, tags:array<int,string>, scale:string|null}
+     * @return array{slug:string, title:string, summary:string, problem:string, approach:string, lesson:string|null, tags:array<int,string>, scale:string|null, image:string|null}
      */
     public function toArray(Request $request): array
     {
@@ -23,6 +23,7 @@ class SystemResource extends JsonResource
             'lesson' => $this->lesson,
             'tags' => $this->tags,
             'scale' => $this->scale,
+            'image' => $this->image,
         ];
     }
 }
