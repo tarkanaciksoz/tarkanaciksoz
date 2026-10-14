@@ -84,3 +84,20 @@ it('rejects client timings that are not numbers', function () {
 it('says so when a trace has expired', function () {
     $this->getJson('/api/traces/01JQQQQQQQQQQQQQQQQQQQQQQQ')->assertNotFound();
 });
+
+it('links the source it shows to that commit on the public repository', function () {
+    $commit = str_repeat('a1', 20);
+    config(['tracing.commit' => $commit, 'tracing.repository' => 'https://github.com/owner/repo']);
+
+    $id = $this->getJson('/api/stack')->headers->get('X-Trace-Id');
+    $trace = $this->getJson("/api/traces/{$id}")->json('data');
+    $controller = collect($trace['spans'])->firstWhere('kind', 'controller');
+    $query = collect($trace['spans'])->firstWhere('kind', 'query');
+    $source = $controller['source'];
+
+    expect($trace['commit'])->toBe('a1a1a1a')
+        ->and($trace['commit_url'])->toBe("https://github.com/owner/repo/commit/{$commit}")
+        ->and($trace['files_url'])->toBe("https://github.com/owner/repo/blob/{$commit}")
+        ->and($source['url'])->toBe("https://github.com/owner/repo/blob/{$commit}/app/Http/Controllers/Api/StackController.php#L{$source['line_start']}-L{$source['line_end']}")
+        ->and($query['source']['url'])->toBe("https://github.com/owner/repo/blob/{$commit}/app/Repositories/StackRepository.php#L{$query['source']['line_start']}");
+});

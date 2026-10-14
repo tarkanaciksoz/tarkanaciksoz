@@ -137,7 +137,10 @@ final class Tracer
             'method' => $this->method,
             'path' => $this->path,
             'status' => $status,
-            'commit' => SourceExcerpt::commit(),
+            'commit' => Repository::short(),
+            // Links for the reader: the commit, and a base that any file path can be appended to.
+            'commit_url' => Repository::commitUrl(),
+            'files_url' => Repository::filesUrl(),
             'runtime' => [
                 'php' => PHP_VERSION,
                 'laravel' => app()->version(),

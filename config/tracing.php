@@ -13,6 +13,9 @@ return [
     // Response header carrying the trace id. nginx's X-Request-Id is reused when present.
     'header' => 'X-Trace-Id',
 
-    // Short commit hash of the deployed code. Falls back to `git rev-parse` when unset.
+    // Commit hash of the deployed code. Read from .git/HEAD when unset.
     'commit' => env('APP_COMMIT'),
+
+    // Public repository the source excerpts link to, at the commit that served the request.
+    'repository' => env('TRACING_REPOSITORY', 'https://github.com/tarkanaciksoz/tarkanaciksoz'),
 ];

@@ -73,14 +73,7 @@ final class TracingServiceProvider extends ServiceProvider
                 $excerpt[] = ['n' => $n, 'text' => $lines[$n - 1] ?? ''];
             }
 
-            return [
-                'file' => SourceExcerpt::relative($file),
-                'vendor' => false,
-                'line_start' => $line,
-                'line_end' => $line,
-                'excerpt' => $excerpt,
-                'commit' => SourceExcerpt::commit(),
-            ];
+            return SourceExcerpt::record(SourceExcerpt::relative($file), $line, $line, $excerpt);
         }
 
         return null;

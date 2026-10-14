@@ -48,6 +48,9 @@ export type SourceExcerpt = {
     line_end: number;
     excerpt: { n: number; text: string }[];
     commit: string | null;
+    /** These lines on the public repository, at the commit that served the request. */
+    url: string | null;
+    commit_url: string | null;
 };
 
 export type Span = {
@@ -85,6 +88,9 @@ export type Trace = {
     path: string;
     status: number;
     commit: string | null;
+    commit_url: string | null;
+    /** The repository's files at that commit; append a relative path. */
+    files_url: string | null;
     runtime: { php: string; laravel: string; server: string };
     started_at: string;
     duration_ms: number;

@@ -2,13 +2,12 @@
 
 namespace App\Tracing;
 
-use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Process;
 use ReflectionFunctionAbstract;
 
 /**
- * Turns a reflected function or method into "file, lines, excerpt, commit":
- * the evidence panel on the anatomy page. Not a paste; read from the same checkout that served the request.
+ * Turns a reflected function or method into "file, lines, excerpt, commit, link": the
+ * evidence panel on the page. Not a paste; read from the same checkout that served the
+ * request, and linked to that commit on the public repository.
  */
 final class SourceExcerpt
 {
@@ -37,13 +36,25 @@ final class SourceExcerpt
             $excerpt[] = ['n' => $n, 'text' => $lines[$n - 1] ?? ''];
         }
 
+        return self::record(self::relative($file), $start, $end, $excerpt,
+            str_contains($file, DIRECTORY_SEPARATOR.'vendor'.DIRECTORY_SEPARATOR));
+    }
+
+    /**
+     * @param  list<array{n:int, text:string}>  $excerpt
+     * @return array{file:string, vendor:bool, line_start:int, line_end:int, excerpt:list<array{n:int, text:string}>, commit:string|null, url:string|null, commit_url:string|null}
+     */
+    public static function record(string $file, int $start, int $end, array $excerpt, bool $vendor = false): array
+    {
         return [
-            'file' => self::relative($file),
-            'vendor' => str_contains($file, DIRECTORY_SEPARATOR.'vendor'.DIRECTORY_SEPARATOR),
+            'file' => $file,
+            'vendor' => $vendor,
             'line_start' => $start,
             'line_end' => $end,
             'excerpt' => $excerpt,
-            'commit' => self::commit(),
+            'commit' => Repository::short(),
+            'url' => $vendor ? null : Repository::fileUrl($file, $start, $end),
+            'commit_url' => Repository::commitUrl(),
         ];
     }
 
@@ -52,22 +63,5 @@ final class SourceExcerpt
         $base = rtrim(base_path(), DIRECTORY_SEPARATOR).DIRECTORY_SEPARATOR;
 
         return str_starts_with($file, $base) ? substr($file, strlen($base)) : $file;
-    }
-
-    public static function commit(): ?string
-    {
-        if ($configured = config('tracing.commit')) {
-            return $configured;
-        }
-
-        return Cache::remember('tracing:commit', now()->addHour(), function () {
-            try {
-                $result = Process::path(base_path())->run('git rev-parse --short HEAD');
-
-                return $result->successful() ? trim($result->output()) : null;
-            } catch (\Throwable) {
-                return null;
-            }
-        });
     }
 }

@@ -1,5 +1,6 @@
 import { ms } from '@/lib/api';
 import type { ClientTiming, SourceExcerpt, Trace } from '@/types/portfolio';
+import { ArrowUpRight } from '@phosphor-icons/react';
 import type { ReactNode } from 'react';
 import { crc32, HexDump } from '../signal/hex-dump';
 import { NoiseField } from '../signal/noise-field';
@@ -18,6 +19,25 @@ function Frame({ label, aside, children, foot }: { label: ReactNode; aside?: Rea
             <div className="min-h-0 flex-1 overflow-auto">{children}</div>
             {foot && <div className="border-t border-white/10 px-4 py-2 font-mono text-[11.5px] text-zinc-400">{foot}</div>}
         </figure>
+    );
+}
+
+/** Opens the repository at the commit that served this request; plain text when there is no link. */
+function Source({ href, children, badge = false }: { href: string | null | undefined; children: ReactNode; badge?: boolean }) {
+    const look = badge
+        ? 'border border-white/25 px-1.5 text-zinc-200 hover:border-[#ff3b30]'
+        : 'underline decoration-white/25 underline-offset-4 hover:decoration-[#ff3b30]';
+    if (!href) return <span className={badge ? look : ''}>{children}</span>;
+    return (
+        <a
+            href={href}
+            target="_blank"
+            rel="noreferrer"
+            className={`group/src inline-flex items-baseline gap-1 transition-colors hover:text-zinc-50 ${look}`}
+        >
+            {children}
+            <ArrowUpRight aria-hidden className="size-3 shrink-0 self-center opacity-60 transition-opacity group-hover/src:opacity-100" />
+        </a>
     );
 }
 
@@ -40,15 +60,19 @@ function Lines({ lines }: { lines: { n: number; text: string; hit: boolean }[] }
 function Code({ source }: { source: SourceExcerpt }) {
     return (
         <Frame
-            label={source.file}
+            label={<Source href={source.url}>{source.file}</Source>}
             aside={
                 source.vendor ? (
                     <span className="text-zinc-400">vendor</span>
                 ) : (
-                    source.commit && <span className="border border-white/25 px-1.5 text-zinc-200">{source.commit}</span>
+                    source.commit && (
+                        <Source href={source.commit_url} badge>
+                            {source.commit}
+                        </Source>
+                    )
                 )
             }
-            foot="Read from the checkout that served this request, not pasted in."
+            foot="Read from the checkout that served this request, not pasted in. The path and the commit open them on GitHub."
         >
             <Lines lines={source.excerpt.map((l) => ({ n: l.n, text: l.text, hit: l.n >= source.line_start && l.n <= source.line_end }))} />
         </Frame>
@@ -60,7 +84,18 @@ function Sql({ step }: { step: Step }) {
     return (
         <Frame
             label="the statement, and the database's plan for it"
-            foot={step.source ? `called from ${step.source.file}:${step.source.line_start}` : 'issued by the framework'}
+            foot={
+                step.source ? (
+                    <>
+                        called from{' '}
+                        <Source href={step.source.url}>
+                            {step.source.file}:{step.source.line_start}
+                        </Source>
+                    </>
+                ) : (
+                    'issued by the framework'
+                )
+            }
         >
             <pre className="px-4 py-3 font-mono text-[12.5px] leading-relaxed whitespace-pre-wrap text-zinc-100">{step.sql}</pre>
             {plan.length > 0 && (
@@ -112,7 +147,7 @@ function TraceRecord({ trace, focus }: { trace: Trace; focus: string }) {
         lines.push({ text: `// ${unclaimed.toFixed(3)} ms is claimed by nothing`, hit: true });
     }
     return (
-        <Frame label={`GET /api/traces/${trace.id}`} foot="The same record this view was drawn from.">
+        <Frame label={<Source href={`/api/traces/${trace.id}`}>GET /api/traces/{trace.id}</Source>} foot="The same record this view was drawn from.">
             <Lines lines={lines.map((l, i) => ({ n: i + 1, ...l }))} />
         </Frame>
     );
@@ -152,7 +187,10 @@ function Fetch({ data }: { data: RunData }) {
         `response.headers.get('Cache-Status')  // ${data.cache ?? 'none'}`,
     ];
     return (
-        <Frame label="resources/js/lib/api.ts" foot="The trace id in the response header is how this view found the record.">
+        <Frame
+            label={<Source href={data.trace.files_url && `${data.trace.files_url}/resources/js/lib/api.ts`}>resources/js/lib/api.ts</Source>}
+            foot="The trace id in the response header is how this view found the record."
+        >
             <Lines lines={lines.map((text, i) => ({ n: i + 1, text, hit: i >= 4 }))} />
         </Frame>
     );
