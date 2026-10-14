@@ -212,14 +212,6 @@
         background-size: 4px 4px;
     }
 
-    .scanlines::after {
-        content: '';
-        position: absolute;
-        inset: 0;
-        pointer-events: none;
-        background: repeating-linear-gradient(to bottom, rgba(255, 255, 255, 0.035) 0 1px, transparent 1px 3px);
-    }
-
     .grain::before {
         content: '';
         position: fixed;
@@ -251,14 +243,6 @@
     .split::after {
         color: #22d3ee;
         animation: split-right 2.4s steps(2) infinite;
-    }
-
-    .tear {
-        animation: tear 3.6s steps(1) infinite;
-    }
-
-    .flicker {
-        animation: flicker 4s steps(1) infinite;
     }
 }
 
@@ -314,53 +298,9 @@
     }
 }
 
-@keyframes tear {
-    0%,
-    88%,
-    100% {
-        clip-path: inset(0 0 0 0);
-        transform: translateX(0);
-    }
-    89% {
-        clip-path: inset(22% 0 62% 0);
-        transform: translateX(6px);
-    }
-    90% {
-        clip-path: inset(0 0 0 0);
-        transform: translateX(0);
-    }
-    93% {
-        clip-path: inset(66% 0 18% 0);
-        transform: translateX(-5px);
-    }
-    94% {
-        clip-path: inset(0 0 0 0);
-        transform: translateX(0);
-    }
-}
-
-@keyframes flicker {
-    0%,
-    96%,
-    100% {
-        opacity: 1;
-    }
-    97% {
-        opacity: 0.35;
-    }
-    98% {
-        opacity: 1;
-    }
-    99% {
-        opacity: 0.6;
-    }
-}
-
 @media (prefers-reduced-motion: reduce) {
     .split::before,
     .split::after,
-    .tear,
-    .flicker,
     .grain::before {
         animation: none;
     }
@@ -368,54 +308,6 @@
     .split::after {
         opacity: 0;
     }
-}
-
-/* ---------------------------------------------------------------------------
-   Assembly: the stack is built from the ground up when its section comes into
-   view — database first, browser last — each layer landing with an impact.
-   --------------------------------------------------------------------------- */
-@keyframes layer-drop {
-    0% {
-        transform: translateY(-150px);
-        opacity: 0;
-    }
-    55% {
-        transform: translateY(9px);
-        opacity: 1;
-    }
-    70% {
-        transform: translateY(-4px);
-    }
-    84% {
-        transform: translateY(2px);
-    }
-    100% {
-        transform: translateY(0);
-        opacity: 1;
-    }
-}
-.layer-drop {
-    animation: layer-drop 0.74s cubic-bezier(0.3, 0.7, 0.2, 1) both;
-}
-@keyframes layer-impact {
-    0%,
-    50% {
-        opacity: 0;
-        transform: scaleX(0.15);
-    }
-    56% {
-        opacity: 1;
-        transform: scaleX(1);
-    }
-    100% {
-        opacity: 0;
-        transform: scaleX(1.35);
-    }
-}
-.layer-impact {
-    transform-box: fill-box;
-    transform-origin: center;
-    animation: layer-impact 0.95s ease-out both;
 }
 
 /* A terminal cursor blinks; it does not fade. */
@@ -530,36 +422,12 @@
     animation: tear-run 7s linear infinite;
 }
 
-/* Log lines arrive, they do not fade in. */
-@keyframes line-in {
-    0% {
-        opacity: 0;
-        transform: translateX(-4px);
-    }
-    40% {
-        opacity: 1;
-    }
-    100% {
-        opacity: 1;
-        transform: translateX(0);
-    }
-}
-.line-in {
-    animation: line-in 0.22s steps(3) both;
-}
-
 @media (prefers-reduced-motion: reduce) {
-    .layer-drop,
-    .layer-impact,
     .blink,
     .burst,
     .jitter:hover,
-    .tear-line::after,
-    .line-in {
+    .tear-line::after {
         animation: none;
-    }
-    .layer-impact {
-        opacity: 0;
     }
 }
 

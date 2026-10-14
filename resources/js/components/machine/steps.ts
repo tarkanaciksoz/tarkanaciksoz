@@ -51,7 +51,7 @@ export function buildSteps(trace: Trace, client: ClientTiming | null): Step[] {
         ms: 0,
         kind: 'client',
         why: 'Everything on this page is one request. Nothing here was written into the HTML at build time.',
-        detail: `fetch('/api${trace.path.replace('/api', '')}') from the page you are reading. The response carries a trace id, and that id is how this view found the record below.`,
+        detail: `fetch('/api${trace.path.replace('/api', '')}') from the page you are reading. The response carries a trace id, and that id is how this view found its record.`,
         source: null,
         depth: 0,
     });
@@ -143,7 +143,7 @@ export function buildSteps(trace: Trace, client: ClientTiming | null): Step[] {
                 kind: 'server',
                 why: span.why,
                 detail: sql
-                    ? `One statement on the ${String(span.meta.driver ?? 'sql')} connection. The plan below is the database's own answer to how it will be read.`
+                    ? `One statement on the ${String(span.meta.driver ?? 'sql')} connection. Its plan is the database's own answer to how it will be read.`
                     : span.kind === 'controller'
                       ? 'The controller asks the cache, and only builds the payload when the cache has nothing. It never talks to the database itself.'
                       : span.kind === 'build'

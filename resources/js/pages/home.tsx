@@ -2,7 +2,7 @@ import { CircuitBoard } from '@/components/circuit/circuit-board';
 import type { SceneLayer } from '@/components/hero/glass-scene';
 import { Hero, type HeroRequest } from '@/components/hero/hero';
 import { heroLayers } from '@/components/hero/layers';
-import { Anatomy } from '@/components/portfolio/anatomy';
+import { Machine } from '@/components/machine/machine';
 import { Ambient } from '@/components/signal/ambient';
 import { TearDivider } from '@/components/signal/tear-divider';
 import { Contact } from '@/components/site/contact';
@@ -169,12 +169,11 @@ export default function Home() {
                     <TearDivider />
                     <section id="made" className="relative scroll-mt-16 pt-10">
                         <SectionHead title="How this page was made">
-                            When this section came into view, the page built the stack it runs on, sent the request behind the map above, and began
-                            replaying its trace slowly: browser timings, server spans, the SQL with its query plan, and the deployed lines behind each
-                            step.
+                            One real request to this site, from fetch() to the last byte, sent as you arrived here. Every bar was measured; under each
+                            step is the code, SQL or bytes it rests on.
                         </SectionHead>
                         <div className="mt-10">
-                            <Anatomy />
+                            <Machine />
                         </div>
                     </section>
 

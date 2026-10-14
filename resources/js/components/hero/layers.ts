@@ -1,5 +1,5 @@
 import type { ClientTiming, Trace } from '@/types/portfolio';
-import { layerFor } from '../portfolio/anatomy-steps';
+import { layerFor } from '../machine/steps';
 import type { SceneLayer } from './glass-scene';
 
 const NAMES: Record<string, string> = {
