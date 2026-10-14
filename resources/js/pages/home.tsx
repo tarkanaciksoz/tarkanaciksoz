@@ -118,6 +118,12 @@ export default function Home() {
             <Head title={p ? `${p.name}, ${p.role}` : 'Backend & infrastructure engineer'} />
 
             <div className="grain relative min-h-screen bg-[#050506] font-sans text-zinc-100 selection:bg-[#ff3b30] selection:text-black">
+                <a
+                    href="#content"
+                    className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-50 focus:rounded-[2px] focus:bg-zinc-50 focus:px-4 focus:py-2 focus:font-mono focus:text-[12px] focus:text-black"
+                >
+                    Skip to content
+                </a>
                 <Ambient />
                 <ScrollProgress />
                 <Nav name={p?.name ?? null} ready={!systems.loading && !decisions.loading} />
@@ -125,7 +131,11 @@ export default function Home() {
                 <Intro />
 
                 <SmoothShell>
-                    <main className="relative z-10 mx-auto w-full max-w-[1600px] px-4 pt-14 pb-16 sm:px-8 lg:px-12">
+                    <main
+                        id="content"
+                        tabIndex={-1}
+                        className="relative z-10 mx-auto w-full max-w-[1600px] px-4 pt-14 pb-16 outline-none sm:px-8 lg:px-12"
+                    >
                         <Hero profile={p} layers={layers} request={request} />
 
                         <div className="mt-6 sm:mt-10">
@@ -154,7 +164,7 @@ export default function Home() {
                                     {board.data && (
                                         <>
                                             <CircuitBoard layers={board.data.stack.data} flows={board.data.flows} />
-                                            <p className="mt-8 font-mono text-[12.5px] text-zinc-500">
+                                            <p className="mt-8 font-mono text-[12.5px] text-zinc-400">
                                                 This board is not markup. It is{' '}
                                                 <a
                                                     href="/docs/api"

@@ -41,15 +41,15 @@ export function HexDump({ source, rows = 8, offset = 0, className, hot = null }:
 
     return (
         <pre
-            className={`overflow-x-auto font-mono text-[10.5px] leading-[1.55] text-zinc-500 ${className ?? ''}`}
+            className={`overflow-x-auto font-mono text-[10.5px] leading-[1.55] text-zinc-400 ${className ?? ''}`}
             aria-label="Hex dump of the response body"
         >
             {lines.map((line) => (
                 <div key={line.addr} className="flex gap-3 whitespace-pre">
-                    <span className="text-zinc-700">{line.addr}</span>
+                    <span className="text-zinc-400">{line.addr}</span>
                     <span>
                         {line.cells.map((cell, i) => (
-                            <span key={i} className={cell.hot ? 'bg-[#ff3b30] text-black' : i % 2 ? 'text-zinc-400' : 'text-zinc-500'}>
+                            <span key={i} className={cell.hot ? 'bg-[#ff3b30] text-black' : i % 2 ? 'text-zinc-300' : 'text-zinc-400'}>
                                 {cell.v}
                                 {i === 7 ? '  ' : ' '}
                             </span>

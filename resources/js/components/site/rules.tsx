@@ -87,7 +87,7 @@ export function Rules({ state }: { state: Loadable<Decision[]> }) {
                                 >
                                     <span
                                         data-n={String(i + 1).padStart(2, '0')}
-                                        className={`font-pixel text-lg transition-colors sm:text-2xl ${isOpen ? 'text-[#ff3b30]' : 'text-zinc-700 group-hover:text-zinc-400'}`}
+                                        className={`font-pixel text-lg transition-colors sm:text-2xl ${isOpen ? 'text-[#ff3b30]' : 'text-zinc-400 group-hover:text-zinc-300'}`}
                                     >
                                         {String(i + 1).padStart(2, '0')}
                                     </span>
@@ -103,10 +103,17 @@ export function Rules({ state }: { state: Loadable<Decision[]> }) {
                                         aria-hidden="true"
                                         size={20}
                                         weight="light"
-                                        className={`self-center transition-transform duration-300 ${isOpen ? 'rotate-45 text-[#ff3b30]' : 'text-zinc-600 group-hover:text-zinc-300'}`}
+                                        className={`self-center transition-transform duration-300 ${isOpen ? 'rotate-45 text-[#ff3b30]' : 'text-zinc-400 group-hover:text-zinc-300'}`}
                                     />
                                 </button>
-                                <div id={`rule-${d.id}`} className="rule-body overflow-hidden" style={{ height: i === 0 ? 'auto' : 0 }}>
+                                <div
+                                    id={`rule-${d.id}`}
+                                    className="rule-body overflow-hidden"
+                                    style={{ height: i === 0 ? 'auto' : 0 }}
+                                    // A folded rule is out of the reading order too, not only out of sight.
+                                    inert={!isOpen}
+                                    aria-hidden={!isOpen}
+                                >
                                     <p className="max-w-[58ch] pt-1 pb-8 pl-[3.25rem] text-lg leading-relaxed text-zinc-400 sm:pl-[5.5rem]">
                                         {d.body}
                                     </p>

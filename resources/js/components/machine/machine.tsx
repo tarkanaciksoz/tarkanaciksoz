@@ -32,7 +32,7 @@ function StepText({ row, index, total }: { row: Row; index: number; total: numbe
     const { step } = row;
     return (
         <div className="mx-text min-w-0">
-            <div className="font-mono text-[12px] text-zinc-500">
+            <div className="font-mono text-[12px] text-zinc-400">
                 {index + 1} of {total}, {row.clock === 'browser' ? 'in the browser' : 'at the server'}
                 {step.depth > 0 && ', nested'}
             </div>
@@ -148,7 +148,7 @@ export function Machine() {
                 end: () => `+=${Math.max(1, n - 1) * window.innerHeight * PER_STEP}`,
                 anticipatePin: 1,
                 invalidateOnRefresh: true,
-                snap: n > 1 ? { snapTo: 1 / (n - 1), duration: { min: 0.2, max: 0.45 }, delay: 0.08, ease: 'power2.inOut' } : undefined,
+                // No snap: rounding already steps through the rows, and a snap tween fights the smoother's own scrolling.
                 onUpdate: (self) => {
                     const f = self.progress * (n - 1);
                     fills(f);
@@ -170,10 +170,10 @@ export function Machine() {
     // A new step's words and proof arrive; the waterfall above is what moved.
     useGSAP(
         () => {
-            if (!pinnable || prefersReducedMotion()) return;
+            if (!pinnable || !data || prefersReducedMotion()) return;
             gsap.fromTo('.mx-detail', { autoAlpha: 0, y: 10 }, { autoAlpha: 1, y: 0, duration: 0.35, ease: 'power2.out' });
         },
-        { scope: root, dependencies: [active, runs, pinnable] },
+        { scope: root, dependencies: [active, runs, pinnable, data] },
     );
 
     const pick = useCallback(
@@ -199,7 +199,7 @@ export function Machine() {
     const t = data?.trace;
     const requestLine = (
         <div className="flex flex-wrap items-center justify-between gap-x-8 gap-y-3 border-b border-white/10 pb-4">
-            <p className="flex flex-wrap items-baseline gap-x-5 gap-y-1 font-mono text-[12.5px] text-zinc-500">
+            <p className="flex flex-wrap items-baseline gap-x-5 gap-y-1 font-mono text-[12.5px] text-zinc-400">
                 <span className="text-zinc-100">GET /api/stack</span>
                 {status === 'ready' && t ? (
                     <>
@@ -255,14 +255,14 @@ export function Machine() {
     return (
         <div ref={root}>
             {pinnable ? (
-                <div ref={stage} className="flex h-[100dvh] flex-col pt-16 pb-8">
+                <div ref={stage} className="flex h-[100dvh] flex-col justify-center pt-16 pb-8">
                     {requestLine}
                     {timeline && data && row ? (
                         <>
                             <div className="mt-5">
                                 <Waterfall timeline={timeline} active={active} onPick={pick} />
                             </div>
-                            <div className="mx-detail mt-6 grid min-h-0 flex-1 grid-cols-[minmax(0,5fr)_minmax(0,7fr)] gap-12 border-t border-white/10 pt-6">
+                            <div className="mx-detail mt-6 grid min-h-0 flex-initial grid-cols-[minmax(0,5fr)_minmax(0,7fr)] gap-12 border-t border-white/10 pt-6">
                                 <StepText row={row} index={active} total={rows.length} />
                                 <div className="flex min-h-0 flex-col [&>*]:max-h-full">
                                     <Evidence step={row.step} data={data} />

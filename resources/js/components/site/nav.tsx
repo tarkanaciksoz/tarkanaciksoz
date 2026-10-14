@@ -76,7 +76,10 @@ export function Nav({ name, ready }: { name: string | null; ready: boolean }) {
                             onMouseEnter={scramble}
                             className={`relative py-1 font-mono text-[12px] tracking-[0.06em] uppercase transition-colors hover:text-zinc-50 ${
                                 active === href ? 'text-zinc-50' : ''
-                            } whitespace-nowrap ${href === '#rules' || href === '#contact' ? 'hidden md:inline' : href === '/docs/api' ? 'hidden sm:inline' : ''}`}
+                            } whitespace-nowrap ${
+                                // Phones keep Stack, Machine and Contact; Systems and API docs return at sm, Rules at md.
+                                href === '#rules' ? 'hidden md:inline' : href === '/docs/api' || href === '#systems' ? 'hidden sm:inline' : ''
+                            }`}
                         >
                             <span data-label={label}>{label}</span>
                             <span

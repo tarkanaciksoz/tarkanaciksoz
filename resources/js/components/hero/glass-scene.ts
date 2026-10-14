@@ -57,12 +57,19 @@ const SignalShader = {
             vec3 col = vec3(r, gb);
             col *= 0.9 + 0.1 * sin(vUv.y * uLines * 3.14159);
 
-            // Transparent where nothing was drawn, so the page shows through; the faintest bloom haze is cut.
+            // Transparent where nothing was drawn, so the page shows through. This runs on linear
+            // light, before the output pass encodes to sRGB, so the cut-offs are the linear values
+            // of the grey a faint bloom haze would otherwise become.
             float m = max(col.r, max(col.g, col.b));
-            // Cut after sRGB encoding, where a whisper of linear glow has already become a visible grey.
-            float keep = smoothstep(0.02, 0.07, m);
-            col *= keep;
-            gl_FragColor = vec4(col, clamp(max(smoothstep(0.02, 0.25, m) * keep, max(col.r, max(col.g, col.b))), 0.0, 1.0));
+            float keep = smoothstep(0.0015, 0.006, m);
+            // Fade out towards the canvas edge, so no glow ever ends on a straight line.
+            float edge = smoothstep(0.0, 0.08, vUv.x) * (1.0 - smoothstep(0.92, 1.0, vUv.x))
+                       * smoothstep(0.0, 0.08, vUv.y) * (1.0 - smoothstep(0.92, 1.0, vUv.y));
+            float f = keep * edge;
+            col *= f;
+            // Alpha follows the encoded brightness (gamma ~2.2), so colour never exceeds coverage after sRGB.
+            float alpha = max(smoothstep(0.0015, 0.05, m), pow(m, 0.4545)) * pow(f, 0.4545);
+            gl_FragColor = vec4(col, clamp(alpha, 0.0, 1.0));
         }
     `,
 };
@@ -140,7 +147,8 @@ export class GlassScene {
         private canvas: HTMLCanvasElement,
         private reduced: boolean,
     ) {
-        this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, powerPreference: 'high-performance' });
+        // Antialiasing comes from the composer's multisampled target; a decorative hero does not need the discrete GPU.
+        this.renderer = new THREE.WebGLRenderer({ canvas, antialias: false, alpha: true, powerPreference: 'default' });
         this.renderer.setClearColor(0x000000, 0);
         this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
 
@@ -211,13 +219,14 @@ export class GlassScene {
         );
         this.rig.add(this.bits);
 
-        this.composer = new EffectComposer(this.renderer);
+        this.composer = new EffectComposer(this.renderer, new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: 4 }));
         this.composer.addPass(new RenderPass(this.scene, this.camera));
         this.bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.7, 0.2, 0.18);
         this.composer.addPass(this.bloom);
-        this.composer.addPass(new OutputPass());
         this.signal = new ShaderPass(SignalShader);
         this.composer.addPass(this.signal);
+        // Tone mapping and sRGB encoding last, as the output pass is meant to be used.
+        this.composer.addPass(new OutputPass());
 
         window.addEventListener('pointermove', this.onPointer, { passive: true });
         this.nextKick = performance.now() + 2500;
@@ -335,7 +344,6 @@ export class GlassScene {
         this.camera.updateProjectionMatrix();
         this.renderer.setSize(this.width, this.height, false);
         this.composer.setSize(this.width, this.height);
-        this.bloom.resolution.set(this.width / 2, this.height / 2);
         this.signal.uniforms.uLines.value = this.height;
         if (this.reduced || !this.running) this.render(performance.now());
     }

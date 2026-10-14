@@ -1,3 +1,4 @@
+import { apiGet } from '@/lib/api';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useReducedMotion } from '../signal/use-reduced-motion';
 import { apply, commonPrefix, complete, display, isDir, resolve, type Tree } from './completion';
@@ -8,6 +9,33 @@ type Menu = { token: string; items: string[]; index: number };
 
 const HISTORY_KEY = 'glassbox:terminal-history';
 const HOST = 'glassbox';
+
+/** Answered here, not by the model: what this shell can actually do. */
+const HELP = [
+    'This shell answers from a model, except where it can ask the real API.',
+    '',
+    '  curl /api/<name>     a real request to this site: stack, systems, decisions, flows, profile',
+    '  ls, cd, cat, tree    look around /home/guest',
+    '  whoami, uname -a     who and where',
+    '  history, clear       this session',
+    '',
+    '  tab completes   up/down history   ctrl+c stops   esc leaves',
+].join('\n');
+
+/** A GET to the site's own API, printed the way curl -i would: status, the headers that matter, the start of the body. */
+async function realCurl(path: string): Promise<string> {
+    const result = await apiGet<unknown>(path);
+    const body = JSON.stringify(result.body, null, 2).split('\n');
+    const shown = body.slice(0, 18);
+    return [
+        `HTTP/1.1 ${result.status}`,
+        `X-Trace-Id: ${result.traceId ?? 'none'}`,
+        ...(result.cache ? [`Cache-Status: ${result.cache}`] : []),
+        '',
+        ...shown,
+        ...(body.length > shown.length ? [`... ${body.length - shown.length} more lines`] : []),
+    ].join('\n');
+}
 
 let nextId = 1;
 const line = (kind: Line['kind'], text: string, extra: Partial<Line> = {}): Line => ({ id: nextId++, kind, text, ...extra });
@@ -24,8 +52,8 @@ function PromptLabel({ who, cwd }: { who: string; cwd: string }) {
     return (
         <span className="shrink-0 whitespace-pre">
             <span className={who === 'guest' ? 'text-zinc-300' : 'text-[#ff3b30]'}>{who}</span>
-            <span className="text-zinc-600">@{HOST}</span>
-            <span className="text-zinc-500">:{cwd}</span>
+            <span className="text-zinc-400">@{HOST}</span>
+            <span className="text-zinc-400">:{cwd}</span>
             <span className="text-zinc-400">$ </span>
         </span>
     );
@@ -110,6 +138,29 @@ export function Terminal({ owner, intro }: { owner: string; intro: string }) {
 
             if (command === 'clear') {
                 setLines([]);
+                return;
+            }
+
+            if (command === 'help') {
+                print(line('out', HELP));
+                exchanges.current = [...exchanges.current, { command, output: 'help printed' }].slice(-6);
+                return;
+            }
+
+            // A curl at this site's own API is answered by the API itself, not imagined.
+            const curl = command.match(/^curl\b[^|>]*?(\/api\/[\w\-/]+)/);
+            if (curl && !curl[1].startsWith('/api/terminal')) {
+                setRunning(true);
+                try {
+                    const text = await realCurl(curl[1]);
+                    print(line('out', text));
+                    exchanges.current = [...exchanges.current, { command, output: text.slice(0, 600) }].slice(-6);
+                } catch {
+                    print(line('err', `curl: (7) Failed to connect to ${HOST} port 80`));
+                } finally {
+                    setRunning(false);
+                    window.setTimeout(() => inputRef.current?.focus(), 0);
+                }
                 return;
             }
 
@@ -224,6 +275,13 @@ export function Terminal({ owner, intro }: { owner: string; intro: string }) {
         }
         if (running) return;
 
+        // An empty line gives Tab back to the page, so the terminal is never a keyboard trap.
+        if (e.key === 'Tab' && !input && !menu) return;
+        if (e.key === 'Escape' && !menu) {
+            inputRef.current?.blur();
+            return;
+        }
+
         if (e.key === 'Tab') {
             e.preventDefault();
             openCompletion(e.shiftKey ? -1 : 1);
@@ -283,7 +341,13 @@ export function Terminal({ owner, intro }: { owner: string; intro: string }) {
             className="relative border-l border-white/15 pl-4 font-mono text-[13px] leading-[1.7] transition-colors focus-within:border-[#ff3b30]/70"
             onClick={() => inputRef.current?.focus()}
         >
-            <div ref={scrollRef} className="max-h-[188px] min-h-[84px] overflow-y-auto pr-2">
+            <div
+                ref={scrollRef}
+                role="log"
+                aria-live="polite"
+                aria-label="Terminal output"
+                className="max-h-[188px] min-h-[84px] overflow-y-auto pr-2"
+            >
                 <div className="flex flex-wrap">
                     <PromptLabel who={owner} cwd="~" />
                     <span className="text-zinc-100">{whoami.slice(0, typed)}</span>
@@ -311,8 +375,8 @@ export function Terminal({ owner, intro }: { owner: string; intro: string }) {
                     <div className="flex flex-wrap break-all">
                         <PromptLabel who="guest" cwd={cwd} />
                         <span className="whitespace-pre-wrap text-zinc-100">{input}</span>
-                        <span className="whitespace-pre text-zinc-600">{suggestion}</span>
-                        {!input && !lines.length && !focused && <span className="ml-1 text-zinc-600">type help</span>}
+                        <span className="whitespace-pre text-zinc-400">{suggestion}</span>
+                        {!input && !lines.length && !focused && <span className="ml-1 text-zinc-400">type help</span>}
                         <span
                             className={`inline-block h-[1.1em] w-[0.6em] translate-y-[0.2em] ${focused ? 'blink bg-zinc-100' : 'border border-zinc-500'}`}
                             aria-hidden="true"

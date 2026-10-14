@@ -73,7 +73,7 @@ return [
          */
         'elements' => [
             'view' => 'scramble::docs',
-            'theme' => 'light',
+            'theme' => 'dark',
             'hideTryIt' => false,
             'hideSchemas' => false,
             'logo' => '',

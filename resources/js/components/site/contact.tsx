@@ -34,7 +34,8 @@ export function Contact({ profile }: { profile: Profile | null }) {
                             color: '#d4d4d8',
                             stagger: 0.08,
                             ease: 'none',
-                            scrollTrigger: { trigger: '.contact-read', start: 'top 85%', end: 'bottom 45%', scrub: true },
+                            // Clamped, so the last words light up even though the page ends before the paragraph reaches mid-screen.
+                            scrollTrigger: { trigger: '.contact-read', start: 'top 85%', end: 'clamp(bottom 70%)', scrub: true },
                         },
                     ),
             });
@@ -116,7 +117,7 @@ export function Contact({ profile }: { profile: Profile | null }) {
                 </ul>
             )}
 
-            <footer className="mt-24 flex flex-wrap justify-between gap-3 border-t border-white/8 pt-5 pb-4 font-mono text-[12px] text-zinc-600">
+            <footer className="mt-24 flex flex-wrap justify-between gap-3 border-t border-white/8 pt-5 pb-4 font-mono text-[12px] text-zinc-400">
                 <span>{profile?.name}</span>
                 <span>Every number on this page came from the API, live.</span>
             </footer>

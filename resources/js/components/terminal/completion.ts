@@ -49,7 +49,7 @@ const SUBCOMMANDS: Record<string, string[]> = {
     df: ['-h'],
     free: ['-h'],
     ls: ['-a', '-l', '-la'],
-    curl: ['/api/decisions', '/api/profile', '/api/stack', '/api/systems'],
+    curl: ['/api/decisions', '/api/flows', '/api/profile', '/api/stack', '/api/systems'],
     man: ['bash', 'cat', 'cd', 'grep', 'ls'],
 };
 

@@ -60,11 +60,13 @@ export function Ambient() {
                     vy: rand(0.12, 0.35),
                     ch: Math.random() < 0.5 ? '0' : '1',
                     a: rand(0.05, 0.13),
-                    size: rand(9, 12),
+                    // Three sizes only, so a frame sets the canvas font three times, not once per bit.
+                    size: pick([9, 10.5, 12]),
                     color: Math.random() < 0.12 ? pick(COLORS) : WHITE,
                     glitch: 0,
                 });
             }
+            bits.sort((p, q) => p.size - q.size);
         };
 
         const layout = () => {
@@ -227,10 +229,14 @@ export function Ambient() {
             ctx.clearRect(0, 0, W, H);
             ctx.textBaseline = 'top';
 
+            let font = 0;
             for (const b of bits) {
                 if (b.y < top || b.y > bottom) continue;
                 const y = b.y - sy;
-                ctx.font = mono(b.size);
+                if (b.size !== font) {
+                    font = b.size;
+                    ctx.font = mono(font);
+                }
                 const rgb = b.color;
                 if (b.glitch > 0) {
                     const c = b.glitch > 2 ? pick([...NOISE, '0', '1']) : b.ch;

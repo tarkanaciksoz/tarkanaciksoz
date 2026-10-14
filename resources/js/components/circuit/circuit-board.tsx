@@ -1,14 +1,15 @@
 import { prefersReducedMotion, ScrollTrigger } from '@/lib/gsap';
 import type { Flow, StackItem, StackLayer } from '@/types/portfolio';
 import { X } from '@phosphor-icons/react';
-import { animate, createDrawable, createMotionPath, createTimeline, stagger, utils } from 'animejs';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { animate, createDrawable, createMotionPath, createTimeline, stagger, utils, type Timeline } from 'animejs';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Scramble } from '../motion/scramble';
 import { BOARD, CHIP, placeChips, route, rowY, type ChipBox } from './geometry';
 
 const TRAVEL = 700;
-const DWELL = 950;
-const HOLD = 2800;
+/** How long a hop's note stays up: long enough to read, scaled by its words. */
+const dwell = (note: string) => 600 + 260 * note.trim().split(/\s+/).length;
+const HOLD = 1600;
 
 type Step = { box: ChipBox; item: StackItem; note: string; hot: boolean };
 
@@ -29,6 +30,9 @@ export function CircuitBoard({ layers, flows }: { layers: StackLayer[]; flows: F
     const [run, setRun] = useState(0);
     const [picked, setPicked] = useState<number | null>(null);
     const [inView, setInView] = useState(false);
+    const [paused, setPaused] = useState(false);
+    const [focusedChip, setFocusedChip] = useState<number | null>(null);
+    const [rovingChip, setRovingChip] = useState<number | null>(() => layers[0]?.items[0]?.id ?? null);
 
     const rootRef = useRef<HTMLDivElement>(null);
     const svgRef = useRef<SVGSVGElement>(null);
@@ -36,6 +40,9 @@ export function CircuitBoard({ layers, flows }: { layers: StackLayer[]; flows: F
     const scanRef = useRef<SVGGElement>(null);
     const pathRefs = useRef<(SVGPathElement | null)[]>([]);
     const landed = useRef(false);
+    const timeline = useRef<Timeline | null>(null);
+    const holding = useRef(false);
+    const pausedRef = useRef(false);
 
     const flow = flows[flowIndex];
     const steps: Step[] = useMemo(
@@ -48,6 +55,25 @@ export function CircuitBoard({ layers, flows }: { layers: StackLayer[]; flows: F
     const inFlow = useMemo(() => new Set(steps.map((s) => s.item.id)), [steps]);
     const visited = useMemo(() => new Set(steps.slice(0, hop + 1).map((s) => s.item.id)), [steps, hop]);
     const current = hop >= 0 ? steps[hop] : null;
+    const grid = useMemo(() => layers.map((l) => l.items.map((i) => i.id)), [layers]);
+
+    // Keep only as many trace refs as this scenario draws.
+    useLayoutEffect(() => {
+        pathRefs.current.length = Math.max(0, steps.length - 1);
+    }, [steps]);
+
+    // The sequence holds while the visitor is reading the board, or when they paused it.
+    const hold = useCallback(() => {
+        const tl = timeline.current;
+        if (!tl) return;
+        if (pausedRef.current || holding.current) tl.pause();
+        else tl.resume();
+    }, []);
+
+    useEffect(() => {
+        pausedRef.current = paused;
+        hold();
+    }, [paused, hold]);
 
     // Plays only while the board is on screen.
     useEffect(() => {
@@ -119,7 +145,7 @@ export function CircuitBoard({ layers, flows }: { layers: StackLayer[]; flows: F
         });
         paths.forEach((path, i) => {
             const k = i + 1;
-            tl.add(traces[i], { draw: ['0 0', '0 1'], duration: TRAVEL, ease: 'inOutQuad' }, `+=${DWELL}`)
+            tl.add(traces[i], { draw: ['0 0', '0 1'], duration: TRAVEL, ease: 'inOutQuad' }, `+=${dwell(steps[i].note)}`)
                 .add(
                     packet,
                     {
@@ -135,12 +161,15 @@ export function CircuitBoard({ layers, flows }: { layers: StackLayer[]; flows: F
                 )
                 .call(() => setHop(k));
         });
-        tl.call(() => undefined, `+=${HOLD}`);
+        tl.call(() => undefined, `+=${dwell(steps[steps.length - 1].note) + HOLD}`);
+        timeline.current = tl;
+        hold();
 
         return () => {
+            timeline.current = null;
             tl.revert();
         };
-    }, [inView, steps, run, auto, flows.length]);
+    }, [inView, steps, run, auto, flows.length, hold]);
 
     const play = useCallback((index: number) => {
         setAuto(false);
@@ -148,6 +177,41 @@ export function CircuitBoard({ layers, flows }: { layers: StackLayer[]; flows: F
         setFlowIndex(index);
         setRun((r) => r + 1);
     }, []);
+
+    // An opened detail takes focus; Escape closes it and hands focus back to its chip.
+    useEffect(() => {
+        if (picked === null) return;
+        // The detail renders twice (popover on wide screens, card below on narrow ones); focus the one on screen.
+        const visible = Array.from(rootRef.current?.querySelectorAll<HTMLButtonElement>('[data-close]') ?? []).find((b) => b.offsetParent !== null);
+        visible?.focus({ preventScroll: true });
+    }, [picked]);
+
+    const close = useCallback(() => {
+        const id = picked;
+        setPicked(null);
+        if (id !== null) svgRef.current?.querySelector<SVGGElement>(`[data-chip="${id}"]`)?.focus({ preventScroll: true });
+    }, [picked]);
+
+    /** Arrow keys walk the board: along a row, or to the nearest chip in the row above or below. */
+    const moveFocus = useCallback(
+        (id: number, key: string) => {
+            const box = chips.get(id);
+            if (!box) return;
+            let row = box.row;
+            let col = box.col;
+            if (key === 'ArrowRight') col += 1;
+            else if (key === 'ArrowLeft') col -= 1;
+            else if (key === 'ArrowDown') row += 1;
+            else if (key === 'ArrowUp') row -= 1;
+            else return;
+            if (row < 0 || row >= grid.length) return;
+            col = Math.max(0, Math.min(col, grid[row].length - 1));
+            const next = grid[row][col];
+            setRovingChip(next);
+            svgRef.current?.querySelector<SVGGElement>(`[data-chip="${next}"]`)?.focus({ preventScroll: true });
+        },
+        [chips, grid],
+    );
 
     const pickedEntry = picked !== null ? byId.get(picked) : null;
     const pickedBox = picked !== null ? chips.get(picked) : null;
@@ -161,16 +225,16 @@ export function CircuitBoard({ layers, flows }: { layers: StackLayer[]; flows: F
                 <span className="text-[17px] font-medium text-zinc-50">
                     <Scramble key={pickedEntry.item.id} text={pickedEntry.item.name} duration={0.4} />
                 </span>
-                <button type="button" onClick={() => setPicked(null)} className="text-zinc-500 hover:text-zinc-100" aria-label="Close">
+                <button data-close type="button" onClick={close} className="text-zinc-400 hover:text-zinc-100" aria-label="Close">
                     <X size={16} weight="light" />
                 </button>
             </div>
-            <div className="mt-0.5 font-mono text-[11.5px] text-zinc-500">
+            <div className="mt-0.5 font-mono text-[11.5px] text-zinc-400">
                 {pickedEntry.layer.name}, {pickedEntry.item.services !== null ? `used by ${pickedEntry.item.services} services` : 'not counted'}
             </div>
             <p className="mt-3 text-[14px] leading-relaxed text-zinc-300">{pickedEntry.item.why}</p>
             {pickedEntry.item.instead_of && (
-                <p className="mt-2 text-[13px] text-zinc-500">
+                <p className="mt-2 text-[13px] text-zinc-400">
                     <span className="text-zinc-300">Instead of</span> {pickedEntry.item.instead_of}
                 </p>
             )}
@@ -187,7 +251,7 @@ export function CircuitBoard({ layers, flows }: { layers: StackLayer[]; flows: F
                         </button>
                     ))
                 ) : (
-                    <span className="font-mono text-[11.5px] text-zinc-600">in no scenario yet</span>
+                    <span className="font-mono text-[11.5px] text-zinc-400">in no scenario yet</span>
                 )}
             </div>
         </>
@@ -205,15 +269,29 @@ export function CircuitBoard({ layers, flows }: { layers: StackLayer[]; flows: F
           }
         : null;
 
+    const holdOn = () => {
+        holding.current = true;
+        hold();
+    };
+    const holdOff = () => {
+        holding.current = false;
+        hold();
+    };
+
     return (
-        <div ref={rootRef}>
-            <div role="tablist" aria-label="Scenarios" className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:px-0">
+        <div
+            ref={rootRef}
+            onPointerEnter={holdOn}
+            onPointerLeave={holdOff}
+            onFocus={holdOn}
+            onBlur={(e) => !e.currentTarget.contains(e.relatedTarget as Node | null) && holdOff()}
+        >
+            <div role="group" aria-label="Scenarios" className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:px-0">
                 {flows.map((f, i) => (
                     <button
                         key={f.slug}
                         type="button"
-                        role="tab"
-                        aria-selected={i === flowIndex}
+                        aria-pressed={i === flowIndex}
                         onClick={() => play(i)}
                         className={`shrink-0 rounded-[2px] border px-3.5 py-2 text-[14px] transition-colors active:translate-y-px ${
                             i === flowIndex
@@ -228,13 +306,13 @@ export function CircuitBoard({ layers, flows }: { layers: StackLayer[]; flows: F
             <p className="mt-4 max-w-[70ch] text-zinc-400">{flow.summary}</p>
 
             {/* Board: desktop */}
-            <div className="relative mt-6 hidden overflow-hidden rounded-[2px] border border-white/12 bg-[#040405]/80 lg:block">
+            <div className="relative mt-6 hidden overflow-hidden rounded-[2px] border border-white/12 bg-[#040405]/80 xl:block">
                 <svg
                     ref={svgRef}
                     viewBox={`0 0 ${BOARD.w} ${BOARD.h}`}
                     className="block h-auto w-full"
-                    role="img"
-                    aria-label={`Circuit board: ${flow.title}`}
+                    role="group"
+                    aria-label={`Circuit board: ${flow.title}. Arrow keys move between tools, Enter opens one.`}
                 >
                     <defs>
                         <pattern id="cbDots" width="12" height="12" patternUnits="userSpaceOnUse">
@@ -300,10 +378,6 @@ export function CircuitBoard({ layers, flows }: { layers: StackLayer[]; flows: F
                             strokeLinejoin="round"
                         />
                     ))}
-                    {(() => {
-                        pathRefs.current.length = Math.max(0, steps.length - 1);
-                        return null;
-                    })()}
 
                     {layers.flatMap((layer) =>
                         layer.items.map((item) => {
@@ -313,18 +387,34 @@ export function CircuitBoard({ layers, flows }: { layers: StackLayer[]; flows: F
                             const seen = visited.has(item.id);
                             const involved = inFlow.has(item.id);
                             const selected = picked === item.id;
+                            const marked = selected || focusedChip === item.id;
 
                             return (
                                 <g
                                     key={item.id}
                                     transform={`translate(${box.x} ${box.y})`}
+                                    data-chip={item.id}
                                     role="button"
-                                    tabIndex={0}
-                                    aria-label={item.name}
+                                    tabIndex={item.id === rovingChip ? 0 : -1}
+                                    aria-label={`${item.name}, ${layer.name}${involved ? ', in this scenario' : ''}`}
                                     onClick={() => setPicked(item.id)}
-                                    onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && setPicked(item.id)}
+                                    onFocus={() => {
+                                        setFocusedChip(item.id);
+                                        setRovingChip(item.id);
+                                    }}
+                                    onBlur={() => setFocusedChip(null)}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter' || e.key === ' ') {
+                                            e.preventDefault();
+                                            setPicked(item.id);
+                                        } else if (e.key.startsWith('Arrow')) {
+                                            e.preventDefault();
+                                            moveFocus(item.id, e.key);
+                                        }
+                                    }}
+                                    // The focus ring is drawn on the chip itself (red stroke), not by the browser.
                                     className="cursor-pointer outline-none"
-                                    opacity={involved ? 1 : 0.32}
+                                    opacity={involved ? 1 : 0.55}
                                 >
                                     <g className="chip-body">
                                         <g className={isCurrent ? 'chip-land' : undefined} key={isCurrent ? `c${hop}${run}` : 'idle'}>
@@ -339,8 +429,8 @@ export function CircuitBoard({ layers, flows }: { layers: StackLayer[]; flows: F
                                                 height={CHIP.h}
                                                 rx="2"
                                                 fill={isCurrent ? (hot ? '#ff3b30' : '#fff') : '#0a0a0c'}
-                                                stroke={selected ? '#ff3b30' : seen ? 'rgba(255,255,255,.75)' : 'rgba(255,255,255,.22)'}
-                                                strokeWidth={selected ? 1.6 : 1}
+                                                stroke={marked ? '#ff3b30' : seen ? 'rgba(255,255,255,.75)' : 'rgba(255,255,255,.22)'}
+                                                strokeWidth={marked ? 1.6 : 1}
                                             />
                                             {!isCurrent && item.services !== null && (
                                                 <rect
@@ -402,6 +492,7 @@ export function CircuitBoard({ layers, flows }: { layers: StackLayer[]; flows: F
                         style={popover}
                         role="dialog"
                         aria-label={pickedEntry.item.name}
+                        onKeyDown={(e) => e.key === 'Escape' && close()}
                     >
                         {detail}
                     </div>
@@ -409,7 +500,7 @@ export function CircuitBoard({ layers, flows }: { layers: StackLayer[]; flows: F
             </div>
 
             {/* Pipeline: phones and tablets */}
-            <ol className="relative mt-6 border-l border-white/15 pl-5 lg:hidden">
+            <ol className="relative mt-6 border-l border-white/15 pl-5 xl:hidden">
                 {steps.map((s, i) => {
                     const state = i < hop ? 'past' : i === hop ? 'now' : 'next';
                     return (
@@ -430,27 +521,39 @@ export function CircuitBoard({ layers, flows }: { layers: StackLayer[]; flows: F
                     );
                 })}
             </ol>
-            {pickedEntry && <div className="mt-2 border border-[#ff3b30]/60 p-4 lg:hidden">{detail}</div>}
+            {pickedEntry && (
+                <div className="mt-2 border border-[#ff3b30]/60 p-4 xl:hidden" onKeyDown={(e) => e.key === 'Escape' && close()}>
+                    {detail}
+                </div>
+            )}
 
             {/* Console: where the signal is, and why */}
             <div className="mt-4 grid gap-2 border-t border-white/10 pt-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-baseline lg:gap-8">
-                <p className="min-w-0 text-[15px] text-zinc-300">
+                <p className="min-w-0 text-[15px] [overflow-wrap:anywhere] text-zinc-300" aria-live="polite">
                     {current ? (
                         <>
-                            <span className="mr-3 font-mono text-[12px] text-zinc-600 tabular-nums">
+                            <span className="mr-3 font-mono text-[12px] text-zinc-400 tabular-nums">
                                 {hop + 1}/{steps.length}
                             </span>
                             <span className={`mr-2 font-medium ${current.hot ? 'text-[#ff3b30]' : 'text-zinc-50'}`}>{current.item.name}</span>
                             <Scramble key={`${flow.slug}${hop}${run}`} text={current.note} duration={0.5} />
                         </>
                     ) : (
-                        <span className="text-zinc-500">The signal starts when the board is on screen.</span>
+                        <span className="text-zinc-400">The signal starts when the board is on screen.</span>
                     )}
                 </p>
-                <div className="flex items-baseline gap-6 font-mono text-[12px] text-zinc-500">
-                    <span className="hidden lg:inline">
+                <div className="flex items-baseline gap-6 font-mono text-[12px] text-zinc-400">
+                    <span className="hidden xl:inline">
                         <span className="text-[#ff3b30]">red numbers</span> count the services using a tool
                     </span>
+                    <button
+                        type="button"
+                        onClick={() => setPaused((p) => !p)}
+                        aria-pressed={paused}
+                        className="jitter text-zinc-100 underline decoration-white/30 underline-offset-4"
+                    >
+                        {paused ? 'Play' : 'Pause'}
+                    </button>
                     <button
                         type="button"
                         onClick={() => play(flowIndex)}

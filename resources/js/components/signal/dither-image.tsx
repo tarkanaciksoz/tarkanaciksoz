@@ -95,7 +95,17 @@ export function DitherImage({ src, alt, className = '' }: Props) {
             image = img;
             sample();
         };
-        img.src = src;
+
+        // The photograph is fetched only when its box comes near the screen, sideways included.
+        const near = new IntersectionObserver(
+            (entries) => {
+                if (!entries.some((e) => e.isIntersecting)) return;
+                near.disconnect();
+                img.src = src;
+            },
+            { rootMargin: '600px 1400px' },
+        );
+        near.observe(box);
 
         // Transformed parents (the sideways track) still report true geometry to an observer.
         const io = new IntersectionObserver((entries) => entries.some((e) => e.isIntersecting) && decode(), { threshold: 0.35 });
@@ -115,6 +125,7 @@ export function DitherImage({ src, alt, className = '' }: Props) {
         box.addEventListener('pointerenter', tear);
 
         return () => {
+            near.disconnect();
             io.disconnect();
             ro.disconnect();
             window.clearTimeout(timer);

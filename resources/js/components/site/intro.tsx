@@ -7,8 +7,8 @@ const SEEN_KEY = 'glassbox:booted';
 const BANDS = 9;
 /** What the page waits for before it opens: its own document, its fonts, and the first two answers from its API. */
 const WAITS = ['document', 'fonts', '/api/profile', '/api/stack'];
-const MIN_MS = 1100;
-const MAX_MS = 2600;
+const MIN_MS = 600;
+const MAX_MS = 1600;
 
 const seenThisSession = () => {
     try {
@@ -26,7 +26,8 @@ const line = (e: LogEntry) => `${e.method} ${e.path}  ${e.status}  ${e.ms.toFixe
  * Once per session; never under reduced motion.
  */
 export function Intro() {
-    const [show] = useState(() => typeof window !== 'undefined' && !prefersReducedMotion() && !seenThisSession());
+    // Not when the visitor arrived at a particular section: they came for it, not for the show.
+    const [show] = useState(() => typeof window !== 'undefined' && !prefersReducedMotion() && !seenThisSession() && !window.location.hash);
     const [gone, setGone] = useState(!show);
     const [lines, setLines] = useState<string[]>([]);
     const root = useRef<HTMLDivElement>(null);
@@ -137,7 +138,7 @@ export function Intro() {
                 />
             ))}
             <div className="intro-copy absolute inset-0 flex flex-col justify-between p-5 sm:p-10 lg:p-12">
-                <ol className="max-w-xl font-mono text-[12px] leading-[1.8] text-zinc-500">
+                <ol className="max-w-xl font-mono text-[12px] leading-[1.8] text-zinc-400">
                     {lines.map((text, i) => (
                         <li key={`${i}${text}`} className={i === lines.length - 1 ? 'text-zinc-200' : undefined}>
                             {text}
@@ -149,7 +150,7 @@ export function Intro() {
                         <span ref={counter} className="font-pixel text-[28vw] leading-[0.78] text-zinc-100 tabular-nums sm:text-[22vw]">
                             000
                         </span>
-                        <span className="mb-[2vw] hidden max-w-[22ch] text-right font-mono text-[12px] text-zinc-500 sm:block">
+                        <span className="mb-[2vw] hidden max-w-[22ch] text-right font-mono text-[12px] text-zinc-400 sm:block">
                             This page is loading itself. Every line above is its own request.
                         </span>
                     </div>

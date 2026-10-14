@@ -10,6 +10,14 @@ import { Terminal } from '../terminal/terminal';
 import { GlassCanvas } from './glass-canvas';
 import type { SceneLayer } from './glass-scene';
 
+/** The owner's name as a shell user: first name, lower case, plain ASCII. */
+const shellUser = (name: string) =>
+    name
+        .split(' ')[0]
+        .normalize('NFD')
+        .replace(/[^a-zA-Z]/g, '')
+        .toLowerCase() || 'owner';
+
 export type HeroRequest = { status: number; serverMs: number; cache: string | null } | 'failed';
 
 /**
@@ -93,14 +101,17 @@ export function Hero({ profile, layers, request }: { profile: Profile | null; la
                     </a>
                 </div>
                 <div data-hero="term" className="mt-12 max-w-xl">
-                    <Terminal owner="tarkan" intro={`${profile?.role ?? 'Backend & infrastructure engineer'}, ${profile?.location ?? 'Istanbul'}`} />
+                    <Terminal
+                        owner={profile ? shellUser(profile.name) : 'owner'}
+                        intro={profile ? `${profile.role}, ${profile.location}` : 'reading /api/profile'}
+                    />
                 </div>
             </div>
 
             {/* The box bleeds to the right edge of the window; the copy keeps the grid. */}
             <figure data-hero="figure" data-speed="0.85" className="relative min-w-0 lg:-mr-12">
                 <GlassCanvas layers={layers} className="h-[48vh] min-h-[320px] w-full lg:h-[min(72vh,700px)]" />
-                <figcaption data-hero="caption" className="mt-2 font-mono text-[12px] text-zinc-500">
+                <figcaption data-hero="caption" className="mt-2 font-mono text-[12px] text-zinc-400">
                     {request === 'failed' ? (
                         'The trace for this page could not be read.'
                     ) : request ? (

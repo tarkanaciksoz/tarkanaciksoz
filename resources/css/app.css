@@ -6,8 +6,17 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/* Wide and tall enough to pin a section and pan it sideways. */
-@custom-variant pan (@media (min-width: 1024px) and (min-height: 760px));
+/* Wide and tall enough to pin a section and pan it sideways (and the reader has not asked for less motion). */
+@custom-variant pan (@media (min-width: 1024px) and (min-height: 860px) and (prefers-reduced-motion: no-preference));
+/* Wide, but too short to pin, or asked for less motion: the same panels, stacked two columns at a time. */
+@custom-variant split {
+    @media (min-width: 1024px) and (max-height: 859.98px) {
+        @slot;
+    }
+    @media (min-width: 1024px) and (prefers-reduced-motion: reduce) {
+        @slot;
+    }
+}
 
 /* Self-hosted Geist (SIL OFL, see resources/fonts/OFL.txt). */
 @font-face {
@@ -186,6 +195,11 @@
     }
 
     /* The site is dark by request: off-black, never #000, and the browser chrome agrees. */
+    /* Sections take focus after a jump so keyboard users land there; that focus is not an action, so no ring. */
+    [tabindex='-1']:focus {
+        outline: none;
+    }
+
     html:has(#app),
     html:has(#app) body {
         /* Under ScrollSmoother the page's own wrapper is fixed, so the body is what shows below the first screen. */
@@ -429,6 +443,7 @@
     .blink,
     .burst,
     .jitter:hover,
+    .jitter:focus-visible,
     .tear-line::after {
         animation: none;
     }

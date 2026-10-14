@@ -9,7 +9,7 @@ function Wedge({ from, to, label, lit }: { from: [number, number]; to: [number, 
     const p = (n: number) => (n * 100).toFixed(3);
     return (
         <div className={`grid ${COLS} h-7 grid-rows-[28px] items-center gap-3 sm:gap-4`} aria-hidden="true">
-            <span className={`truncate font-mono text-[11px] transition-colors ${lit ? 'text-[#ff3b30]' : 'text-zinc-600'}`}>{label}</span>
+            <span className={`truncate font-mono text-[11px] transition-colors ${lit ? 'text-[#ff3b30]' : 'text-zinc-400'}`}>{label}</span>
             {/* A fixed height: left to its viewBox, the SVG would take its height from its width. */}
             <svg viewBox="0 0 100 10" preserveAspectRatio="none" className="block h-7 w-full overflow-visible">
                 <polygon
@@ -69,11 +69,11 @@ export function Waterfall({ timeline, active, onPick }: { timeline: Timeline; ac
                             onClick={() => onPick(i)}
                             aria-current={state === 'now' ? 'step' : undefined}
                             aria-label={`${row.step.title}, ${ms(row.step.ms)} milliseconds`}
-                            className={`wf-row group grid ${COLS} h-[22px] w-full items-center gap-3 text-left sm:gap-4`}
+                            className={`wf-row group grid ${COLS} h-8 w-full items-center gap-3 text-left sm:h-[22px] sm:gap-4`}
                         >
                             <span
                                 className={`truncate transition-colors ${
-                                    state === 'now' ? 'text-zinc-50' : state === 'past' ? 'text-zinc-400' : 'text-zinc-600'
+                                    state === 'now' ? 'text-zinc-50' : state === 'past' ? 'text-zinc-300' : 'text-zinc-400'
                                 } group-hover:text-zinc-200`}
                                 style={{ paddingLeft: `${Math.min(row.step.depth, 4) * 10}px` }}
                             >
@@ -95,7 +95,7 @@ export function Waterfall({ timeline, active, onPick }: { timeline: Timeline; ac
                             </span>
                             <span
                                 className={`text-right tabular-nums transition-colors ${
-                                    row.step.slow ? 'text-[#ff3b30]' : state === 'now' ? 'text-zinc-50' : 'text-zinc-500'
+                                    row.step.slow ? 'text-[#ff3b30]' : state === 'now' ? 'text-zinc-50' : 'text-zinc-400'
                                 }`}
                             >
                                 {ms(row.step.ms)}

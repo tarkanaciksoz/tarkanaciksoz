@@ -28,9 +28,18 @@ export function useGlitchBurst(ref: RefObject<HTMLElement | null>, every: [numbe
             }, wait);
         };
 
-        schedule();
+        // Only while the element is on screen: no timers ticking for headings nobody can see.
+        const io = el
+            ? new IntersectionObserver(([entry]) => {
+                  window.clearTimeout(timer);
+                  if (entry?.isIntersecting) schedule();
+              })
+            : null;
+        if (el) io?.observe(el);
+
         return () => {
             window.clearTimeout(timer);
+            io?.disconnect();
             el?.removeEventListener('animationend', clear);
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps

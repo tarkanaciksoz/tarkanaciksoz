@@ -1,15 +1,19 @@
 import { gsap, prefersReducedMotion, ScrollTrigger, useGSAP } from '@/lib/gsap';
 import type { System } from '@/types/portfolio';
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import { DitherImage } from '../signal/dither-image';
 import { SectionHead } from './section-head';
 import { SectionState, type Loadable } from './section-state';
 
 function Panel({ system }: { system: System }) {
     return (
-        <article className="sys-panel pan:h-full pan:w-[min(86vw,1240px)] pan:grid-cols-[minmax(0,5fr)_minmax(0,6fr)] pan:gap-12 pan:py-0 pan:pr-16 grid w-full shrink-0 grid-cols-[minmax(0,1fr)] gap-6 py-10">
+        <article className="sys-panel pan:h-full pan:w-[min(86vw,1240px)] pan:grid-cols-[minmax(0,5fr)_minmax(0,6fr)] pan:gap-12 pan:py-0 pan:pr-16 split:grid-cols-[minmax(0,5fr)_minmax(0,6fr)] split:items-start split:gap-12 grid w-full shrink-0 grid-cols-[minmax(0,1fr)] gap-6 py-10">
             {system.image ? (
-                <DitherImage src={system.image} alt={system.title} className="pan:aspect-auto pan:h-full aspect-[3/2] w-full bg-white/[0.015]" />
+                <DitherImage
+                    src={system.image}
+                    alt={system.title}
+                    className="pan:aspect-auto pan:h-full split:aspect-[4/3] split:max-h-[70vh] aspect-[3/2] w-full bg-white/[0.015]"
+                />
             ) : (
                 <div className="pan:block hidden" />
             )}
@@ -18,9 +22,9 @@ function Panel({ system }: { system: System }) {
                 <p className="mt-4 max-w-[52ch] text-lg leading-snug text-zinc-300">{system.summary}</p>
 
                 <dl className="sys-body mt-7 grid gap-x-6 gap-y-4 text-[14.5px] leading-relaxed sm:grid-cols-[84px_minmax(0,1fr)]">
-                    <dt className="font-mono text-[12px] text-zinc-500">problem</dt>
+                    <dt className="font-mono text-[12px] text-zinc-400">problem</dt>
                     <dd className="text-zinc-400">{system.problem}</dd>
-                    <dt className="font-mono text-[12px] text-zinc-500">how</dt>
+                    <dt className="font-mono text-[12px] text-zinc-400">how</dt>
                     <dd className="text-zinc-200">{system.approach}</dd>
                     {system.lesson && (
                         <>
@@ -55,16 +59,18 @@ export function Systems({ state }: { state: Loadable<System[]> }) {
     const track = useRef<HTMLDivElement>(null);
     const bar = useRef<HTMLDivElement>(null);
     const systems = state.data ?? [];
+    const [at, setAt] = useState(1);
 
     useGSAP(
         () => {
             if (!systems.length || prefersReducedMotion()) return;
             const mm = gsap.matchMedia();
 
-            mm.add('(min-width: 1024px) and (min-height: 760px)', () => {
+            mm.add('(min-width: 1024px) and (min-height: 860px)', () => {
                 const el = track.current!;
                 const distance = () => Math.max(0, el.scrollWidth - el.parentElement!.clientWidth);
 
+                const n = systems.length;
                 const pan = gsap.to(el, {
                     x: () => -distance(),
                     ease: 'none',
@@ -72,11 +78,15 @@ export function Systems({ state }: { state: Loadable<System[]> }) {
                         trigger: root.current,
                         pin: true,
                         start: 'top top',
-                        end: () => `+=${distance()}`,
+                        // A little less scroll than track: the pan runs slightly ahead of the wheel.
+                        end: () => `+=${distance() * 0.8}`,
                         scrub: 1,
                         anticipatePin: 1,
                         invalidateOnRefresh: true,
-                        onUpdate: (self) => gsap.set(bar.current, { scaleX: self.progress }),
+                        onUpdate: (self) => {
+                            gsap.set(bar.current, { scaleX: self.progress });
+                            setAt(Math.min(n, Math.floor(self.progress * n) + 1));
+                        },
                     },
                 });
 
@@ -93,7 +103,7 @@ export function Systems({ state }: { state: Loadable<System[]> }) {
                 });
             });
 
-            mm.add('not all and (min-width: 1024px) and (min-height: 760px)', () => {
+            mm.add('not all and (min-width: 1024px) and (min-height: 860px)', () => {
                 ScrollTrigger.batch(gsap.utils.toArray<HTMLElement>('.sys-panel', track.current), {
                     start: 'top 85%',
                     once: true,
@@ -115,7 +125,7 @@ export function Systems({ state }: { state: Loadable<System[]> }) {
                 state={state}
                 endpoint="/api/systems"
                 skeleton={
-                    <div className="pan:grid-cols-[5fr_6fr] mt-10 grid gap-6">
+                    <div className="pan:grid-cols-[5fr_6fr] split:grid-cols-[5fr_6fr] mt-10 grid gap-6">
                         <div className="aspect-[3/2] animate-pulse bg-white/[0.03]" />
                         <div className="space-y-3">
                             <div className="h-9 w-2/3 animate-pulse bg-white/[0.04]" />
@@ -125,10 +135,19 @@ export function Systems({ state }: { state: Loadable<System[]> }) {
                     </div>
                 }
             >
-                <div className="pan:block mt-8 hidden h-px w-full bg-white/10">
-                    <div ref={bar} className="h-px origin-left scale-x-0 bg-[#ff3b30]" />
+                <div className="pan:flex mt-8 hidden items-center gap-6 font-mono text-[12px] text-zinc-400">
+                    <div className="h-px flex-1 bg-white/10">
+                        <div ref={bar} className="h-px bg-[#ff3b30]" style={{ transform: 'scaleX(0)', transformOrigin: 'left center' }} />
+                    </div>
+                    <span className="tabular-nums" aria-live="polite">
+                        {at} of {systems.length}
+                    </span>
+                    <a href="#rules" className="text-zinc-300 underline decoration-white/25 underline-offset-4 hover:text-zinc-50">
+                        Skip to rules
+                    </a>
                 </div>
-                <div className="pan:-mr-12 pan:overflow-hidden pan:motion-reduce:overflow-x-auto mt-8 min-h-0 flex-1">
+                {/* The track runs to the window's right edge, past the page's own margin. */}
+                <div className="pan:mr-[calc(50%-50vw)] pan:overflow-hidden mt-8 min-h-0 flex-1">
                     <div ref={track} className="pan:h-full pan:w-max pan:flex-row flex flex-col">
                         {systems.map((system) => (
                             <Panel key={system.slug} system={system} />

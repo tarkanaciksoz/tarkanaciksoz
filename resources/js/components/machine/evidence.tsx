@@ -16,7 +16,7 @@ function Frame({ label, aside, children, foot }: { label: ReactNode; aside?: Rea
                 {aside}
             </figcaption>
             <div className="min-h-0 overflow-auto">{children}</div>
-            {foot && <div className="border-t border-white/10 px-4 py-2 font-mono text-[11.5px] text-zinc-600">{foot}</div>}
+            {foot && <div className="border-t border-white/10 px-4 py-2 font-mono text-[11.5px] text-zinc-400">{foot}</div>}
         </figure>
     );
 }
@@ -29,8 +29,8 @@ function Lines({ lines }: { lines: { n: number; text: string; hit: boolean }[] }
                     key={line.n}
                     className={`grid grid-cols-[44px_minmax(0,1fr)] ${line.hit ? 'bg-[#ff3b30]/10 shadow-[inset_2px_0_0_#ff3b30]' : ''}`}
                 >
-                    <span className={`pr-3 text-right select-none ${line.hit ? 'text-[#ff3b30]' : 'text-zinc-600'}`}>{line.n}</span>
-                    <span className={`pr-4 whitespace-pre ${line.hit ? 'text-zinc-100' : 'text-zinc-400'}`}>{line.text || ' '}</span>
+                    <span className={`pr-3 text-right select-none ${line.hit ? 'text-[#ff3b30]' : 'text-zinc-400'}`}>{line.n}</span>
+                    <span className={`pr-4 whitespace-pre ${line.hit ? 'text-zinc-100' : 'text-zinc-300'}`}>{line.text || ' '}</span>
                 </div>
             ))}
         </pre>
@@ -43,7 +43,7 @@ function Code({ source }: { source: SourceExcerpt }) {
             label={source.file}
             aside={
                 source.vendor ? (
-                    <span className="text-zinc-500">vendor</span>
+                    <span className="text-zinc-400">vendor</span>
                 ) : (
                     source.commit && <span className="border border-white/25 px-1.5 text-zinc-200">{source.commit}</span>
                 )
@@ -68,7 +68,7 @@ function Sql({ step }: { step: Step }) {
                     <thead>
                         <tr>
                             {Object.keys(plan[0]).map((key) => (
-                                <th key={key} className="pr-4 pb-1 text-left font-normal text-zinc-500">
+                                <th key={key} className="pr-4 pb-1 text-left font-normal text-zinc-400">
                                     {key}
                                 </th>
                             ))}
@@ -125,7 +125,7 @@ function Timing({ client, focus }: { client: ClientTiming; focus: string }) {
             <dl className="grid grid-cols-[minmax(0,auto)_minmax(0,1fr)] gap-x-6 px-4 py-3 font-mono text-[12.5px]">
                 {rows.map(([k, v, hit]) => (
                     <div key={k} className="contents">
-                        <dt className={`py-1 ${hit ? 'text-[#ff3b30]' : 'text-zinc-500'}`}>{k}</dt>
+                        <dt className={`py-1 ${hit ? 'text-[#ff3b30]' : 'text-zinc-400'}`}>{k}</dt>
                         <dd className={`py-1 ${hit ? 'text-zinc-50' : 'text-zinc-300'}`}>{v}</dd>
                     </div>
                 ))}

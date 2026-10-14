@@ -9,9 +9,9 @@ function Item({ entry }: { entry: LogEntry }) {
         <span className="inline-flex items-baseline gap-[0.35em] whitespace-nowrap">
             <span className={entry.method === 'POST' ? 'text-zinc-400' : 'text-[#ff3b30]'}>{entry.method}</span>
             <span className="text-zinc-200">{entry.path}</span>
-            <span className={entry.status >= 400 ? 'text-[#ff3b30]' : 'text-zinc-600'}>{entry.status}</span>
+            <span className={entry.status >= 400 ? 'text-[#ff3b30]' : 'text-zinc-400'}>{entry.status}</span>
             <span className="text-zinc-500">{entry.ms.toFixed(1)}ms</span>
-            {entry.cache && <span className={entry.cache === 'miss' ? 'text-[#ff3b30]' : 'text-zinc-600'}>{entry.cache}</span>}
+            {entry.cache && <span className={entry.cache === 'miss' ? 'text-[#ff3b30]' : 'text-zinc-400'}>{entry.cache}</span>}
         </span>
     );
 }
@@ -25,7 +25,7 @@ export function LiveMarquee() {
     const root = useRef<HTMLDivElement>(null);
     const track = useRef<HTMLDivElement>(null);
     // Kept across re-renders, so a new entry joining the ticker does not make it jump.
-    const motion = useRef({ x: 0, direction: -1, boost: 0 });
+    const motion = useRef({ x: 0, direction: -1, boost: 0, half: 0, visible: true });
 
     useEffect(() => requestLog.subscribe(() => setEntries([...requestLog.entries()].slice(-14))), []);
 
@@ -34,6 +34,21 @@ export function LiveMarquee() {
             const el = track.current;
             if (!el || !entries.length || prefersReducedMotion()) return;
             const m = motion.current;
+            // Measured on resize, not every frame.
+            const measure = () => {
+                m.half = el.scrollWidth / 2;
+            };
+            measure();
+            const ro = new ResizeObserver(measure);
+            ro.observe(el);
+            // Off screen it stops; nothing is drawn there anyway.
+            const seen = ScrollTrigger.create({
+                trigger: root.current,
+                start: 'top bottom',
+                end: 'bottom top',
+                onToggle: (self) => (m.visible = self.isActive),
+            });
+            m.visible = seen.isActive;
             const skew = gsap.quickTo(el, 'skewX', { duration: 0.4, ease: 'power3.out' });
 
             const st = ScrollTrigger.create({
@@ -48,8 +63,8 @@ export function LiveMarquee() {
             });
 
             const tick = (_time: number, delta: number) => {
-                const half = el.scrollWidth / 2;
-                if (!half) return;
+                const half = m.half;
+                if (!half || !m.visible) return;
                 m.boost *= 0.92;
                 if (m.boost < 1) skew(0);
                 m.x = gsap.utils.wrap(-half, 0, m.x + (m.direction * (BASE + m.boost) * delta) / 1000);
@@ -60,6 +75,8 @@ export function LiveMarquee() {
             return () => {
                 gsap.ticker.remove(tick);
                 st.kill();
+                seen.kill();
+                ro.disconnect();
             };
         },
         { scope: root, dependencies: [entries.length], revertOnUpdate: true },

@@ -5,8 +5,13 @@ const HEADER_OFFSET = 64;
 /** Fired when the nav jumps across the page; the glitch overlay listens for it. */
 export const JUMP_EVENT = 'glassbox:jump';
 
-/** Scrolls to an element; under ScrollSmoother it glides, otherwise GSAP eases the native scroll. */
-export function smoothScrollTo(target: Element, offset = HEADER_OFFSET): void {
+/**
+ * Scrolls to an element; under ScrollSmoother it glides, otherwise GSAP eases the native scroll.
+ * Focus follows, so keyboard and screen-reader users land where the eye does.
+ */
+export function smoothScrollTo(target: HTMLElement, offset = HEADER_OFFSET): void {
+    if (!target.hasAttribute('tabindex')) target.tabIndex = -1;
+    target.focus({ preventScroll: true });
     const smoother = ScrollSmoother.get();
     if (smoother && !prefersReducedMotion()) {
         smoother.scrollTo(target, true, `top ${offset}px`);
@@ -32,9 +37,11 @@ export function enableSmoothAnchors(): () => void {
         if (!target) return;
         e.preventDefault();
         window.dispatchEvent(new Event(JUMP_EVENT));
-        smoothScrollTo(target, id === 'top' ? 0 : HEADER_OFFSET);
+        // Going down the nav hides itself, so the section can sit at the very top; going up, leave room for it.
+        const down = target.getBoundingClientRect().top > 0;
+        smoothScrollTo(target, id === 'top' || down ? 0 : HEADER_OFFSET);
         // Keep Inertia's page state in history; only the hash changes.
-        window.history.replaceState(window.history.state, '', `#${id}`);
+        window.history.replaceState(window.history.state, '', `${window.location.pathname}${window.location.search}#${id}`);
     };
     document.addEventListener('click', onClick);
     return () => document.removeEventListener('click', onClick);
