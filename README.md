@@ -100,6 +100,16 @@ php artisan serve
 Laravel 12 · PHP 8.3+ · Inertia · React 19 · TypeScript · Tailwind 4 · Three.js · GSAP ·
 SQLite · Pest · Scramble.
 
+## Deploying
+
+The server holds a git checkout of `main` behind nginx and Cloudflare. One command, run there
+as root, pulls, installs, builds the assets, migrates, syncs the content from the seed files
+and rebuilds the caches:
+
+```bash
+/var/www/html/tarkanaciksoz.com/scripts/deploy.sh
+```
+
 ## Tests
 
 ```bash

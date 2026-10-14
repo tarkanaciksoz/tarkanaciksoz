@@ -8,15 +8,23 @@ use App\Models\StackItem;
 use App\Models\StackLayer;
 use App\Models\System;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\DB;
 
+/**
+ * The site's content is these files. Seeding syncs the database to them: rows are
+ * updated in place, and anything the files no longer name is removed, all in one
+ * transaction so a reader sees the old content or the new, never a mix.
+ */
 class PortfolioSeeder extends Seeder
 {
     public function run(): void
     {
-        $this->seedStack();
-        $this->seedSystems();
-        $this->seedDecisions();
-        $this->seedFlows();
+        DB::transaction(function () {
+            $this->seedStack();
+            $this->seedSystems();
+            $this->seedDecisions();
+            $this->seedFlows();
+        });
     }
 
     private function seedStack(): void
@@ -43,7 +51,12 @@ class PortfolioSeeder extends Seeder
                     ],
                 );
             }
+
+            $model->items()->whereNotIn('name', array_column($layer['items'], 'name'))->delete();
         }
+
+        // A removed layer takes its items with it (cascade).
+        StackLayer::query()->whereNotIn('slug', array_column($layers, 'slug'))->delete();
     }
 
     private function seedSystems(): void
@@ -134,13 +147,17 @@ class PortfolioSeeder extends Seeder
         foreach ($systems as $i => $system) {
             System::updateOrCreate(['slug' => $system['slug']], $system + ['position' => $i + 1, 'visible' => true]);
         }
+
+        System::query()->whereNotIn('slug', array_column($systems, 'slug'))->delete();
     }
 
     private function seedFlows(): void
     {
         $known = StackItem::query()->pluck('name')->all();
 
-        foreach (require database_path('seeders/data/flows.php') as $i => $flow) {
+        $flows = require database_path('seeders/data/flows.php');
+
+        foreach ($flows as $i => $flow) {
             foreach ($flow['steps'] as $step) {
                 if (! in_array($step['tool'], $known, true)) {
                     throw new \RuntimeException("Flow {$flow['slug']} points at an unknown tool: {$step['tool']}");
@@ -149,6 +166,8 @@ class PortfolioSeeder extends Seeder
 
             Flow::updateOrCreate(['slug' => $flow['slug']], $flow + ['position' => $i + 1, 'visible' => true]);
         }
+
+        Flow::query()->whereNotIn('slug', array_column($flows, 'slug'))->delete();
     }
 
     private function seedDecisions(): void
@@ -169,5 +188,7 @@ class PortfolioSeeder extends Seeder
         foreach ($decisions as $i => [$title, $body]) {
             Decision::updateOrCreate(['title' => $title], ['body' => $body, 'position' => $i + 1, 'visible' => true]);
         }
+
+        Decision::query()->whereNotIn('title', array_column($decisions, 0))->delete();
     }
 }
