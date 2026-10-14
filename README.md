@@ -107,8 +107,12 @@ as root, pulls, installs, builds the assets, migrates, syncs the content from th
 and rebuilds the caches:
 
 ```bash
-/var/www/html/tarkanaciksoz.com/scripts/deploy.sh
+deploy-tarkanaciksoz
 ```
+
+That command is `scripts/deploy.sh`, installed root-owned in `/usr/local/sbin`. Root never
+runs the copy inside the checkout, which the deploy itself rewrites; a change to the script
+is reviewed and installed by hand (the command is in the script's header).
 
 ## Tests
 
