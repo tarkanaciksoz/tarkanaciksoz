@@ -216,7 +216,7 @@ export function Ambient() {
             });
         };
 
-        const mono = (px: number) => `${px}px ui-monospace, SFMono-Regular, Menlo, monospace`;
+        const mono = (px: number) => `${px}px "Geist Mono", ui-monospace, monospace`;
 
         const draw = () => {
             const sy = window.scrollY;
@@ -311,8 +311,15 @@ export function Ambient() {
         observer.observe(document.body);
 
         if (reduced) {
-            draw();
-            window.addEventListener('scroll', draw, { passive: true });
+            // Nothing moves, so only redraw when the page has scrolled.
+            let lastY = -1;
+            const still = () => {
+                raf = requestAnimationFrame(still);
+                if (window.scrollY === lastY) return;
+                lastY = window.scrollY;
+                draw();
+            };
+            raf = requestAnimationFrame(still);
         } else {
             nextLone = performance.now() + 1200;
             nextPair = performance.now() + 2500;
@@ -322,7 +329,6 @@ export function Ambient() {
         return () => {
             cancelAnimationFrame(raf);
             window.removeEventListener('resize', layout);
-            window.removeEventListener('scroll', draw);
             observer.disconnect();
         };
     }, []);

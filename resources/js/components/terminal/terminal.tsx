@@ -286,9 +286,14 @@ export function Terminal({ owner, intro }: { owner: string; intro: string }) {
             <div className="flex items-center justify-between gap-3 border-b border-white/10 px-3 py-1.5 text-[10.5px] tracking-[0.12em] text-zinc-600 uppercase">
                 <span className="flex items-center gap-2">
                     <span className={`h-1.5 w-1.5 ${running ? 'blink bg-[#ff3b30]' : focused ? 'bg-white' : 'bg-white/40'}`} />
-                    guest@{HOST} — bash
+                    guest@{HOST}
+                    <span className="text-zinc-700">bash</span>
                 </span>
-                <span className="hidden sm:inline">tab complete · ↑↓ history · ctrl+c</span>
+                <span className="hidden gap-4 sm:flex">
+                    <span>tab complete</span>
+                    <span>↑↓ history</span>
+                    <span>ctrl+c</span>
+                </span>
             </div>
 
             <div ref={scrollRef} className="h-[196px] overflow-y-auto px-3 py-2 sm:h-[212px]">

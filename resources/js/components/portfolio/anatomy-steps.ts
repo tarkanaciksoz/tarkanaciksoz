@@ -32,7 +32,7 @@ export const LAYERS: { id: LayerId; name: string; sub: string; glyph: string }[]
 
 const round = (n: number) => Math.round(n * 100) / 100;
 
-function layerFor(span: Span): LayerId {
+export function layerFor(span: Span): LayerId {
     if (span.kind === 'query') return 'db';
     if (span.kind === 'build') return 'cache';
     if (span.kind === 'repository') return 'db';
@@ -160,14 +160,19 @@ export function buildSteps(trace: Trace, client: ClientTiming | null): Step[] {
     };
     walk(null, 0);
 
+    // Boot, middleware and the response already sit outside every span, so they are part of the
+    // unattributed time; only what is left after them is truly unclaimed.
+    const phased = trace.phases.filter((p) => p.name !== 'controller').reduce((n, p) => n + p.ms, 0);
+    const unclaimed = Math.max(0, trace.unattributed_ms - phased);
+
     steps.push({
         key: 'unattributed',
         layer: 'edge',
         title: 'Unattributed',
-        ms: round(trace.unattributed_ms),
+        ms: round(unclaimed),
         kind: 'gap',
-        why: 'A tracer that hides the remainder is lying about the total. This is what the spans did not claim.',
-        detail: `${trace.leaf_ms.toFixed(1)} ms inside measured spans plus ${trace.unattributed_ms.toFixed(1)} ms outside them makes the ${trace.duration_ms.toFixed(1)} ms the server took. Container resolution, event dispatch and framework plumbing live here.`,
+        why: 'A tracer that hides the remainder is lying about the total. This is what neither a span nor a phase claimed.',
+        detail: `${trace.leaf_ms.toFixed(1)} ms inside measured spans, ${phased.toFixed(1)} ms in boot, middleware and the response, and ${unclaimed.toFixed(2)} ms that nothing claimed make the ${trace.duration_ms.toFixed(1)} ms the server took. Container resolution, event dispatch and framework plumbing live here.`,
         source: null,
         depth: 0,
     });

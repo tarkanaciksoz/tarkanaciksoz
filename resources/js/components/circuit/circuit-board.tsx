@@ -1,6 +1,8 @@
+import { prefersReducedMotion, ScrollTrigger } from '@/lib/gsap';
 import type { Flow, StackItem, StackLayer } from '@/types/portfolio';
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { DecodeText } from '../signal/decode-text';
+import { animate, createDrawable, createMotionPath, createTimeline, stagger, utils } from 'animejs';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Scramble } from '../motion/scramble';
 import { BOARD, CHIP, placeChips, route, rowY, type ChipBox } from './geometry';
 
 const TRAVEL = 700;
@@ -27,10 +29,10 @@ export function CircuitBoard({ layers, flows }: { layers: StackLayer[]; flows: F
     const [inView, setInView] = useState(false);
 
     const rootRef = useRef<HTMLDivElement>(null);
+    const svgRef = useRef<SVGSVGElement>(null);
     const packetRef = useRef<SVGGElement>(null);
     const pathRefs = useRef<(SVGPathElement | null)[]>([]);
-    const lengths = useRef<number[]>([]);
-    const hopRef = useRef(-1);
+    const landed = useRef(false);
 
     const flow = flows[flowIndex];
     const steps: Step[] = useMemo(
@@ -44,101 +46,78 @@ export function CircuitBoard({ layers, flows }: { layers: StackLayer[]; flows: F
     const visited = useMemo(() => new Set(steps.slice(0, hop + 1).map((s) => s.item.id)), [steps, hop]);
     const current = hop >= 0 ? steps[hop] : null;
 
+    // Plays only while the board is on screen.
     useEffect(() => {
         const el = rootRef.current;
         if (!el) return;
-        const io = new IntersectionObserver((entries) => setInView(entries.some((e) => e.isIntersecting)), { threshold: 0.2 });
-        io.observe(el);
-        return () => io.disconnect();
+        const trigger = ScrollTrigger.create({ trigger: el, start: 'top 80%', end: 'bottom 20%', onToggle: (self) => setInView(self.isActive) });
+        return () => trigger.kill();
     }, []);
 
-    // Measure every trace once it is drawn, so it can be revealed stroke by stroke.
-    useLayoutEffect(() => {
-        lengths.current = pathRefs.current.map((p) => p?.getTotalLength() ?? 0);
-        pathRefs.current.forEach((p, i) => {
-            if (!p) return;
-            p.style.strokeDasharray = `${lengths.current[i]}`;
-            p.style.strokeDashoffset = `${lengths.current[i]}`;
-        });
-    }, [steps, run]);
-
-    // The sequencer: spawn on the first chip, then travel, land, dwell, repeat.
+    // The first time the board is seen, the chips seat themselves row by row.
     useEffect(() => {
-        if (!inView || !steps.length) return;
-        const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-
-        const reveal = (upTo: number, progress: number) => {
-            pathRefs.current.forEach((p, i) => {
-                if (!p) return;
-                const len = lengths.current[i] ?? 0;
-                const k = i + 1; // trace i leads into step k
-                const shown = k <= upTo ? 1 : k === upTo + 1 ? progress : 0;
-                p.style.strokeDashoffset = `${len * (1 - shown)}`;
-            });
+        const svg = svgRef.current;
+        if (!inView || landed.current || !svg || prefersReducedMotion()) return;
+        landed.current = true;
+        const cols = Math.max(...layers.map((l) => l.items.length));
+        const seat = animate(svg.querySelectorAll('.chip-body'), {
+            opacity: [0, 1],
+            translateY: [-10, 0],
+            duration: 520,
+            ease: 'outExpo',
+            delay: stagger(14, { grid: [cols, layers.length], from: 'first' }),
+        });
+        return () => {
+            seat.complete();
         };
+    }, [inView, layers]);
 
-        if (reduced) {
-            hopRef.current = steps.length - 1;
+    // The sequencer: one Anime.js timeline per run. Each hop draws its trace while
+    // the packet rides the same path, then the chip it reaches takes the signal.
+    useEffect(() => {
+        const packet = packetRef.current;
+        if (!inView || !steps.length || !packet) return;
+        const paths = pathRefs.current.slice(0, steps.length - 1).filter((p): p is SVGPathElement => !!p);
+        const traces = paths.map((p) => createDrawable(p)[0]);
+
+        if (prefersReducedMotion()) {
+            utils.set(traces, { draw: '0 1' });
+            utils.set(packet, { translateX: steps[steps.length - 1].box.cx, translateY: steps[steps.length - 1].box.cy });
             setHop(steps.length - 1);
-            reveal(steps.length - 1, 1);
             return;
         }
 
-        hopRef.current = 0;
+        utils.set(traces, { draw: '0 0' });
+        utils.set(packet, { translateX: steps[0].box.cx, translateY: steps[0].box.cy });
+        packet.dataset.hot = String(steps[0].hot);
         setHop(0);
-        reveal(0, 0);
-        const began = performance.now();
-        const total = DWELL + (steps.length - 1) * (TRAVEL + DWELL) + HOLD;
-        let raf = 0;
 
-        const tick = (now: number) => {
-            const t = now - began;
-            if (t >= total) {
-                if (auto) setFlowIndex((i) => (i + 1) % flows.length);
-                return;
-            }
+        const tl = createTimeline({
+            onComplete: () => auto && setFlowIndex((i) => (i + 1) % flows.length),
+        });
+        paths.forEach((path, i) => {
+            const k = i + 1;
+            tl.add(traces[i], { draw: ['0 0', '0 1'], duration: TRAVEL, ease: 'inOutQuad' }, `+=${DWELL}`)
+                .add(
+                    packet,
+                    {
+                        ...createMotionPath(path),
+                        rotate: 0,
+                        duration: TRAVEL,
+                        ease: 'inOutQuad',
+                        onBegin: () => {
+                            packet.dataset.hot = String(steps[k].hot);
+                        },
+                    },
+                    '<',
+                )
+                .call(() => setHop(k));
+        });
+        tl.call(() => undefined, `+=${HOLD}`);
 
-            let reached = 0;
-            let progress = 0;
-            let traveling = -1;
-            for (let k = 1; k < steps.length; k++) {
-                const start = DWELL + (k - 1) * (TRAVEL + DWELL);
-                if (t >= start + TRAVEL) reached = k;
-                else if (t >= start) {
-                    traveling = k;
-                    progress = (t - start) / TRAVEL;
-                    break;
-                } else break;
-            }
-
-            if (reached !== hopRef.current) {
-                hopRef.current = reached;
-                setHop(reached);
-            }
-            reveal(reached, progress);
-
-            const packet = packetRef.current;
-            if (packet) {
-                let x = steps[reached].box.cx;
-                let y = steps[reached].box.cy;
-                if (traveling > 0) {
-                    const path = pathRefs.current[traveling - 1];
-                    if (path) {
-                        const ease = progress < 0.5 ? 2 * progress * progress : 1 - Math.pow(-2 * progress + 2, 2) / 2;
-                        const pt = path.getPointAtLength((lengths.current[traveling - 1] ?? 0) * ease);
-                        x = pt.x;
-                        y = pt.y;
-                    }
-                }
-                packet.setAttribute('transform', `translate(${x} ${y})`);
-                packet.dataset.hot = String(traveling > 0 ? steps[traveling].hot : steps[reached].hot);
-            }
-
-            raf = requestAnimationFrame(tick);
+        return () => {
+            tl.revert();
         };
-
-        raf = requestAnimationFrame(tick);
-        return () => cancelAnimationFrame(raf);
     }, [inView, steps, run, auto, flows.length]);
 
     const play = useCallback((index: number) => {
@@ -156,7 +135,13 @@ export function CircuitBoard({ layers, flows }: { layers: StackLayer[]; flows: F
         <div ref={rootRef} className="grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start xl:gap-10">
             {/* Board: desktop */}
             <div className="relative hidden min-w-0 overflow-hidden rounded-[2px] border border-white/12 bg-[#040405]/80 lg:block">
-                <svg viewBox={`0 0 ${BOARD.w} ${BOARD.h}`} className="block h-auto w-full" role="img" aria-label={`Circuit board: ${flow.title}`}>
+                <svg
+                    ref={svgRef}
+                    viewBox={`0 0 ${BOARD.w} ${BOARD.h}`}
+                    className="block h-auto w-full"
+                    role="img"
+                    aria-label={`Circuit board: ${flow.title}`}
+                >
                     <defs>
                         <pattern id="cbDots" width="12" height="12" patternUnits="userSpaceOnUse">
                             <rect width="1" height="1" fill="rgba(255,255,255,.07)" />
@@ -174,7 +159,11 @@ export function CircuitBoard({ layers, flows }: { layers: StackLayer[]; flows: F
                     {layers.map((layer, r) => (
                         <g key={layer.slug}>
                             <line x1="160" x2={BOARD.w - 12} y1={rowY(r) + CHIP.h + 22} y2={rowY(r) + CHIP.h + 22} stroke="rgba(255,255,255,.035)" />
-                            <text x="18" y={rowY(r) + 16} style={{ fill: '#ff3b30', fontSize: 10, fontFamily: 'ui-monospace, monospace' }}>
+                            <text
+                                x="18"
+                                y={rowY(r) + 16}
+                                style={{ fill: '#ff3b30', fontSize: 10, fontFamily: 'Geist Mono, ui-monospace, monospace' }}
+                            >
                                 {`G${r + 1}`}
                             </text>
                             <text x="18" y={rowY(r) + 31} style={{ fill: '#a1a1aa', fontSize: 12, fontWeight: 500 }}>
@@ -232,73 +221,85 @@ export function CircuitBoard({ layers, flows }: { layers: StackLayer[]; flows: F
                                     className="cursor-pointer outline-none"
                                     opacity={involved ? 1 : 0.32}
                                 >
-                                    <g className={isCurrent ? 'chip-land' : undefined} key={isCurrent ? `c${hop}${run}` : 'idle'}>
-                                        {[0, 1, 2, 3, 4].map((pin) => (
-                                            <g key={pin} fill={seen ? 'rgba(255,255,255,.55)' : 'rgba(255,255,255,.2)'}>
-                                                <rect x={16 + pin * 28} y={-4} width="3" height="4" />
-                                                <rect x={16 + pin * 28} y={CHIP.h} width="3" height="4" />
-                                            </g>
-                                        ))}
-                                        <rect
-                                            width={CHIP.w}
-                                            height={CHIP.h}
-                                            rx="2"
-                                            fill={isCurrent ? (hot ? '#ff3b30' : '#fff') : '#0a0a0c'}
-                                            stroke={selected ? '#ff3b30' : seen ? 'rgba(255,255,255,.75)' : 'rgba(255,255,255,.22)'}
-                                            strokeWidth={selected ? 1.6 : 1}
-                                        />
-                                        {!isCurrent && item.services !== null && (
+                                    <g className="chip-body">
+                                        <g className={isCurrent ? 'chip-land' : undefined} key={isCurrent ? `c${hop}${run}` : 'idle'}>
+                                            {[0, 1, 2, 3, 4].map((pin) => (
+                                                <g key={pin} fill={seen ? 'rgba(255,255,255,.55)' : 'rgba(255,255,255,.2)'}>
+                                                    <rect x={16 + pin * 28} y={-4} width="3" height="4" />
+                                                    <rect x={16 + pin * 28} y={CHIP.h} width="3" height="4" />
+                                                </g>
+                                            ))}
                                             <rect
                                                 width={CHIP.w}
                                                 height={CHIP.h}
                                                 rx="2"
-                                                fill="url(#cbDither)"
-                                                opacity={Math.min(0.9, 0.15 + item.services / 60)}
+                                                fill={isCurrent ? (hot ? '#ff3b30' : '#fff') : '#0a0a0c'}
+                                                stroke={selected ? '#ff3b30' : seen ? 'rgba(255,255,255,.75)' : 'rgba(255,255,255,.22)'}
+                                                strokeWidth={selected ? 1.6 : 1}
                                             />
-                                        )}
-                                        <path
-                                            d={`M 0 ${CHIP.h / 2 - 5} a 5 5 0 0 1 0 10`}
-                                            fill="#040405"
-                                            stroke={seen ? 'rgba(255,255,255,.6)' : 'rgba(255,255,255,.25)'}
-                                        />
-                                        {isCurrent && (
-                                            <>
-                                                <text x="13" y="26" style={{ fill: '#ff3b30', fontSize: 11.5, fontWeight: 500 }} className="la-ghost">
-                                                    {item.name}
-                                                </text>
-                                                <text x="15" y="26" style={{ fill: '#22d3ee', fontSize: 11.5, fontWeight: 500 }} className="la-ghost">
-                                                    {item.name}
-                                                </text>
-                                            </>
-                                        )}
-                                        <text
-                                            x="14"
-                                            y="26"
-                                            style={{ fill: isCurrent ? '#000' : seen ? '#fafafa' : '#a1a1aa', fontSize: 11.5, fontWeight: 500 }}
-                                        >
-                                            {item.name}
-                                        </text>
-                                        {item.services !== null && (
+                                            {!isCurrent && item.services !== null && (
+                                                <rect
+                                                    width={CHIP.w}
+                                                    height={CHIP.h}
+                                                    rx="2"
+                                                    fill="url(#cbDither)"
+                                                    opacity={Math.min(0.9, 0.15 + item.services / 60)}
+                                                />
+                                            )}
+                                            <path
+                                                d={`M 0 ${CHIP.h / 2 - 5} a 5 5 0 0 1 0 10`}
+                                                fill="#040405"
+                                                stroke={seen ? 'rgba(255,255,255,.6)' : 'rgba(255,255,255,.25)'}
+                                            />
+                                            {isCurrent && (
+                                                <>
+                                                    <text
+                                                        x="13"
+                                                        y="26"
+                                                        style={{ fill: '#ff3b30', fontSize: 11.5, fontWeight: 500 }}
+                                                        className="la-ghost"
+                                                    >
+                                                        {item.name}
+                                                    </text>
+                                                    <text
+                                                        x="15"
+                                                        y="26"
+                                                        style={{ fill: '#22d3ee', fontSize: 11.5, fontWeight: 500 }}
+                                                        className="la-ghost"
+                                                    >
+                                                        {item.name}
+                                                    </text>
+                                                </>
+                                            )}
                                             <text
-                                                x={CHIP.w - 7}
-                                                y="12"
-                                                textAnchor="end"
-                                                style={{ fill: isCurrent ? '#000' : '#ff3b30', fontSize: 9, fontFamily: 'ui-monospace, monospace' }}
+                                                x="14"
+                                                y="26"
+                                                style={{ fill: isCurrent ? '#000' : seen ? '#fafafa' : '#a1a1aa', fontSize: 11.5, fontWeight: 500 }}
                                             >
-                                                {item.services}
+                                                {item.name}
                                             </text>
-                                        )}
+                                            {item.services !== null && (
+                                                <text
+                                                    x={CHIP.w - 7}
+                                                    y="12"
+                                                    textAnchor="end"
+                                                    style={{
+                                                        fill: isCurrent ? '#000' : '#ff3b30',
+                                                        fontSize: 9,
+                                                        fontFamily: 'Geist Mono, ui-monospace, monospace',
+                                                    }}
+                                                >
+                                                    {item.services}
+                                                </text>
+                                            )}
+                                        </g>
                                     </g>
                                 </g>
                             );
                         }),
                     )}
 
-                    <g
-                        ref={packetRef}
-                        className="cb-packet"
-                        transform={current ? `translate(${current.box.cx} ${current.box.cy})` : 'translate(-50 -50)'}
-                    >
+                    <g ref={packetRef} className="cb-packet">
                         <rect x="-7" y="-7" width="14" height="14" fill="#fff" opacity=".22" filter="url(#cbGlow)" />
                         <rect x="-3.5" y="-3.5" width="7" height="7" fill="#fff" />
                     </g>
@@ -395,7 +396,7 @@ export function CircuitBoard({ layers, flows }: { layers: StackLayer[]; flows: F
                     ))}
                     {current && (
                         <div className="mt-2 border-t border-white/10 pt-2 font-sans text-[13.5px] leading-snug text-zinc-200">
-                            <DecodeText key={`${flow.slug}${hop}${run}`} text={current.note} duration={380} />
+                            <Scramble key={`${flow.slug}${hop}${run}`} text={current.note} duration={0.5} />
                         </div>
                     )}
                 </div>
@@ -404,7 +405,7 @@ export function CircuitBoard({ layers, flows }: { layers: StackLayer[]; flows: F
                     <div className="mt-5 rounded-[2px] border border-[#ff3b30]/50 bg-[#050506] p-4">
                         <div className="flex items-baseline justify-between gap-3">
                             <span className="text-[16px] font-medium text-zinc-50">
-                                <DecodeText key={pickedEntry.item.id} text={pickedEntry.item.name} duration={320} />
+                                <Scramble key={pickedEntry.item.id} text={pickedEntry.item.name} duration={0.4} />
                             </span>
                             <button
                                 type="button"

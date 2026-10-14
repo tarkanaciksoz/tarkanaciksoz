@@ -360,7 +360,7 @@ export function StackVisual({ className = 'w-full', active, building = false, se
                             <tspan
                                 style={{
                                     fill: lit ? '#ff3b30' : '#52525b',
-                                    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                                    fontFamily: 'Geist Mono, ui-monospace, monospace',
                                     fontSize: 10.5,
                                 }}
                             >
@@ -368,11 +368,7 @@ export function StackVisual({ className = 'w-full', active, building = false, se
                             </tspan>
                             {layer.name}
                         </text>
-                        <text
-                            x="300"
-                            y={cy + 14}
-                            style={{ fill: '#6b6b74', fontSize: 11.5, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}
-                        >
+                        <text x="300" y={cy + 14} style={{ fill: '#6b6b74', fontSize: 11.5, fontFamily: 'Geist Mono, ui-monospace, monospace' }}>
                             {layer.sub}
                         </text>
                         {total !== undefined && (
@@ -384,7 +380,7 @@ export function StackVisual({ className = 'w-full', active, building = false, se
                                     fill: lit ? '#f4f4f5' : '#8b8b94',
                                     fontSize: 13,
                                     fontWeight: 500,
-                                    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                                    fontFamily: 'Geist Mono, ui-monospace, monospace',
                                 }}
                             >
                                 {format(total)} ms

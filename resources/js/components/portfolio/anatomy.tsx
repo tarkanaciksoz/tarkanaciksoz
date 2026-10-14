@@ -1,4 +1,5 @@
 import { apiGet, fetchTrace, ms, postClientTiming } from '@/lib/api';
+import { ScrollTrigger } from '@/lib/gsap';
 import type { ClientTiming, StackResponse, Trace } from '@/types/portfolio';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DigitRoll } from '../signal/digit-roll';
@@ -21,7 +22,7 @@ function Bar({ steps, activeKey, onPick }: { steps: Step[]; activeKey: string; o
                 <button
                     key={step.key}
                     type="button"
-                    title={`${step.title} · ${ms(step.ms)} ms`}
+                    title={`${step.title}: ${ms(step.ms)} ms`}
                     onClick={() => onPick(step.key)}
                     style={{ flexGrow: Math.max(step.ms / total, 0.012) }}
                     className={`min-w-[2px] rounded-sm transition-colors ${
@@ -97,9 +98,13 @@ export function Anatomy() {
 
     const steps = useMemo(() => (trace ? buildSteps(trace, client) : []), [trace, client]);
     const active = steps.find((s) => s.key === activeKey) ?? steps[0] ?? null;
-    const total = useMemo(() => steps.reduce((n, s) => n + s.ms, 0), [steps]);
+    const stepSum = useMemo(() => steps.reduce((n, s) => n + s.ms, 0), [steps]);
+    // Steps overlap (a span contains its children), so the honest total is the measured one, not the sum.
+    const total = client?.total_ms ?? trace?.duration_ms ?? stepSum;
+    const shown = elapsed !== null && stepSum ? (Math.min(elapsed, stepSum) / stepSum) * total : total;
     const corrupt = !!active && (!!active.slow || (cache === 'miss' && (active.layer === 'db' || active.layer === 'cache')));
-    const unattributedShare = trace ? Math.min(0.9, trace.unattributed_ms / Math.max(trace.duration_ms, 0.001)) : 0;
+    const unclaimedMs = steps.find((s) => s.kind === 'gap')?.ms ?? 0;
+    const unattributedShare = trace ? Math.min(0.9, unclaimedMs / Math.max(trace.duration_ms, 0.001)) : 0;
     const checksum = useMemo(() => (raw ? crc32(raw) : null), [raw]);
 
     const say = useCallback((text: string, tone: LogLine['tone'] = 'plain', tail?: string) => {
@@ -195,7 +200,7 @@ export function Anatomy() {
             setClient(result.timing);
             const bytes = new TextEncoder().encode(result.raw).length;
             say(
-                `← ${result.status} · ${bytes.toLocaleString()} B · cache ${result.cache ?? '—'}`,
+                `← ${result.status}  ${bytes.toLocaleString()} B  cache ${result.cache ?? 'n/a'}`,
                 result.cache === 'miss' ? 'hot' : 'ok',
                 `crc32 ${crc32(result.raw)}`,
             );
@@ -205,24 +210,24 @@ export function Anatomy() {
 
             if (result.timing) {
                 await postClientTiming(result.traceId, result.timing);
-                say('POST /api/traces/{id}/client-timing', 'plain', `dns ${ms(result.timing.dns_ms)} · ttfb ${ms(result.timing.ttfb_ms)} ms`);
+                say('POST /api/traces/{id}/client-timing', 'plain', `dns ${ms(result.timing.dns_ms)}  ttfb ${ms(result.timing.ttfb_ms)} ms`);
             }
 
             const recorded = await fetchTrace(result.traceId);
             if (!recorded) throw new Error('trace not found');
             const queries = recorded.spans.filter((s) => s.kind === 'query').length;
-            say(`GET /api/traces/{id} · ${recorded.spans.length} spans · ${queries} queries`, 'ok', `${recorded.duration_ms.toFixed(1)} ms`);
+            say(`GET /api/traces/{id}  ${recorded.spans.length} spans  ${queries} queries`, 'ok', `${recorded.duration_ms.toFixed(1)} ms`);
 
             const list = buildSteps(recorded, result.timing);
             const slow = list.find((s) => s.slow);
-            if (slow) say(`slowest · ${slow.title}`, 'hot', `${ms(slow.ms)} ms`);
-            say(`replay · ${list.length} steps · ${PLAYBACK_SECONDS} s`, 'dim');
+            if (slow) say(`slowest: ${slow.title}`, 'hot', `${ms(slow.ms)} ms`);
+            say(`replay  ${list.length} steps in ${PLAYBACK_SECONDS} s`, 'dim');
 
             setTrace(recorded);
             setStatus('ready');
             play(list, 'slow');
         } catch {
-            say('request failed · no trace to read', 'hot');
+            say('request failed, no trace to read', 'hot');
             setStatus('error');
         } finally {
             running.current = false;
@@ -233,17 +238,8 @@ export function Anatomy() {
     useEffect(() => {
         const el = rootRef.current;
         if (!el) return;
-        const io = new IntersectionObserver(
-            (entries) => {
-                if (entries.some((e) => e.isIntersecting)) {
-                    io.disconnect();
-                    run();
-                }
-            },
-            { threshold: 0.25 },
-        );
-        io.observe(el);
-        return () => io.disconnect();
+        const trigger = ScrollTrigger.create({ trigger: el, start: 'top 70%', once: true, onEnter: () => run() });
+        return () => trigger.kill();
     }, [run]);
 
     useEffect(() => () => cancelAnimationFrame(frame.current), []);
@@ -252,26 +248,26 @@ export function Anatomy() {
         if (steps.length && !steps.some((s) => s.key === activeKey)) setActiveKey(steps[0].key);
     }, [steps, activeKey]);
 
-    /** Once the replay has finished, scrolling the steps drives the light instead. */
+    /** Once the replay has finished, scrolling the steps drives the light instead: whichever step crosses the middle owns it. */
     useEffect(() => {
         if (!steps.length || playing) return;
 
-        const onScroll = () => {
-            const mid = window.innerHeight * 0.45;
-            const first = stepRefs.current[steps[0].key];
-            if (!first || first.getBoundingClientRect().top > mid) return;
-            let current = steps[0].key;
-            for (const step of steps) {
-                const el = stepRefs.current[step.key];
-                if (el && el.getBoundingClientRect().top <= mid) current = step.key;
-            }
-            setActiveKey(current);
-            const step = steps.find((s) => s.key === current);
-            if (step) setOrbY(layerY(step.layer));
-        };
-
-        window.addEventListener('scroll', onScroll, { passive: true });
-        return () => window.removeEventListener('scroll', onScroll);
+        const triggers = steps.flatMap((step) => {
+            const el = stepRefs.current[step.key];
+            if (!el) return [];
+            return ScrollTrigger.create({
+                trigger: el,
+                start: 'top 45%',
+                end: 'bottom 45%',
+                onToggle: (self) => {
+                    if (!self.isActive) return;
+                    setActiveKey(step.key);
+                    setOrbY(layerY(step.layer));
+                },
+            });
+        });
+        ScrollTrigger.refresh();
+        return () => triggers.forEach((t) => t.kill());
     }, [steps, playing]);
 
     const totals = useMemo(() => {
@@ -330,12 +326,16 @@ export function Anatomy() {
                     <span className={`mr-2 inline-block h-1.5 w-1.5 align-middle ${busy ? 'blink bg-[#ff3b30]' : 'bg-white/60'}`} />
                     GET <span className="text-zinc-100">/api/stack</span>
                     {trace ? (
-                        <span className="ml-1">
-                            · {trace.status} · <span className="text-zinc-100">{trace.duration_ms.toFixed(1)} ms</span> at the server
-                            {client && <> · {ms(client.total_ms)} ms in the browser</>} · cache {cache}
+                        <span className="ml-3 inline-flex flex-wrap gap-x-4">
+                            <span>{trace.status}</span>
+                            <span>
+                                <span className="text-zinc-100">{trace.duration_ms.toFixed(1)} ms</span> at the server
+                            </span>
+                            {client && <span>{ms(client.total_ms)} ms in the browser</span>}
+                            <span>cache {cache}</span>
                         </span>
                     ) : (
-                        <span className="ml-1 text-zinc-600">· {headline ?? 'no trace'}</span>
+                        <span className="ml-3 text-zinc-600">{headline ?? 'no trace'}</span>
                     )}
                 </div>
                 <div className="flex flex-wrap items-center gap-3">
@@ -374,18 +374,18 @@ export function Anatomy() {
                         <div className="flex items-baseline gap-2">
                             <span
                                 className={`font-mono text-5xl font-medium tracking-tight text-zinc-50 tabular-nums ${corrupt ? 'split' : ''}`}
-                                data-text={ms(elapsed ?? total)}
+                                data-text={ms(shown)}
                             >
-                                {ms(elapsed ?? total)}
+                                {ms(shown)}
                             </span>
-                            <span className="font-mono text-sm text-zinc-500">ms{playing ? ' · replaying' : trace ? ' · end to end' : ''}</span>
+                            <span className="font-mono text-sm text-zinc-500">ms{playing ? ', replaying' : trace ? ' end to end' : ''}</span>
                         </div>
                         <span
                             className={`rounded-sm px-1.5 py-0.5 font-mono text-[10.5px] tracking-[0.14em] uppercase ${
                                 cache === 'miss' ? 'bg-[#ff3b30] text-black' : 'border border-white/20 text-zinc-300'
                             }`}
                         >
-                            cache {cache ?? '—'}
+                            cache {cache ?? 'n/a'}
                         </span>
                     </div>
 
@@ -418,15 +418,15 @@ export function Anatomy() {
                                 onPick={(key) => stepRefs.current[key]?.scrollIntoView({ behavior: 'smooth', block: 'center' })}
                             />
                             <div className="mt-2 font-mono text-[11px] text-zinc-600">
-                                {trace.runtime.server} · PHP {trace.runtime.php} · Laravel {trace.runtime.laravel}
-                                {rows !== null && <> · {rows} rows returned</>}
+                                {trace.runtime.server}, PHP {trace.runtime.php}, Laravel {trace.runtime.laravel}
+                                {rows !== null && <>, {rows} rows returned</>}
                             </div>
                         </div>
                     )}
                     {raw && (
                         <div className="scanlines relative mt-4 overflow-hidden rounded-sm border border-white/10 bg-[#050506] p-3">
                             <div className="mb-2 flex items-baseline justify-between gap-3 font-mono text-[10.5px] tracking-[0.12em] text-zinc-500 uppercase">
-                                <span>response body · {new TextEncoder().encode(raw).length.toLocaleString()} bytes</span>
+                                <span>response body, {new TextEncoder().encode(raw).length.toLocaleString()} bytes</span>
                                 <span>
                                     crc32 <span className="text-zinc-200">{checksum}</span>
                                 </span>
@@ -439,10 +439,10 @@ export function Anatomy() {
                 <div className="sticky top-14 z-20 -mx-4 border-b border-white/8 bg-black/90 px-4 pt-3 pb-3 backdrop-blur lg:hidden">
                     <div className="flex items-baseline justify-between gap-3">
                         <span className="font-mono text-2xl font-medium text-zinc-50 tabular-nums">
-                            {ms(elapsed ?? total)} <span className="text-sm text-zinc-500">ms{playing ? ' · replaying' : ''}</span>
+                            {ms(shown)} <span className="text-sm text-zinc-500">ms{playing ? ', replaying' : ''}</span>
                         </span>
                         <span className={`shrink-0 font-mono text-[12px] ${active?.slow ? 'text-[#ff3b30]' : 'text-zinc-400'}`}>
-                            {active ? `${ms(active.ms)} ms` : `cache ${cache ?? '—'}`}
+                            {active ? `${ms(active.ms)} ms` : `cache ${cache ?? 'n/a'}`}
                         </span>
                     </div>
                     {tower('mx-auto my-2 max-h-[34vh] w-full')}
@@ -465,7 +465,6 @@ export function Anatomy() {
                             style={{ animationDelay: `${Math.min(i, 12) * 40}ms` }}
                         >
                             <div className="flex flex-wrap items-baseline gap-2 font-mono text-[11px] tracking-[0.12em] uppercase">
-                                <span className="text-[#ff3b30]">{`0x${(i * 16).toString(16).toUpperCase().padStart(3, '0')}`}</span>
                                 <span className="text-zinc-500">{LAYERS.find((l) => l.id === step.layer)?.name}</span>
                                 {step.depth > 0 && <span className="text-zinc-600">nested</span>}
                             </div>
@@ -474,7 +473,7 @@ export function Anatomy() {
                                     {step.title}
                                 </span>
                                 <span className={`font-mono text-sm ${step.slow ? 'text-[#ff3b30]' : 'text-zinc-400'}`}>
-                                    <DigitRoll value={step.ms} format={ms} /> ms{step.slow && ' · slowest'}
+                                    <DigitRoll value={step.ms} format={ms} /> ms{step.slow && ', slowest'}
                                 </span>
                             </h3>
                             <p className="mt-3 text-zinc-200">{step.detail}</p>
@@ -518,7 +517,7 @@ export function Anatomy() {
                                 <div className="relative mt-4 h-16 overflow-hidden rounded-sm border border-white/10 bg-black">
                                     <NoiseField className="absolute inset-0 h-full w-full" density={0.08 + unattributedShare * 0.5} />
                                     <span className="absolute bottom-1.5 left-2 font-mono text-[10.5px] tracking-[0.12em] text-zinc-400 uppercase">
-                                        {Math.round(unattributedShare * 100)}% of server time · no span claimed it
+                                        {Math.round(unattributedShare * 100)}% of server time no span claimed
                                     </span>
                                 </div>
                             )}
