@@ -1,7 +1,7 @@
 import { apiGet, fetchTrace, ms, postClientTiming } from '@/lib/api';
 import { gsap, prefersReducedMotion, remeasure, scrollToY, ScrollTrigger, useGSAP } from '@/lib/gsap';
 import { useMagnetic } from '@/lib/magnetic';
-import { useStage } from '@/lib/stage';
+import { useMotion } from '@/lib/stage';
 import type { StackResponse } from '@/types/portfolio';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTextFormation } from '../bits/text';
@@ -24,7 +24,7 @@ function StepText({ row, index, total, number }: { row: Row; index: number; tota
                 step {index + 1} of {total}, {row.clock === 'browser' ? 'in the browser' : 'at the server'}
                 {step.depth > 0 && ', nested'}
             </div>
-            <h3 className="mt-2 text-3xl leading-[1.05] font-semibold tracking-[-0.03em] text-zinc-50 sm:text-4xl">{step.title}</h3>
+            <h3 className="mt-1.5 text-2xl leading-[1.05] font-semibold tracking-[-0.03em] text-zinc-50 lg:mt-2 lg:text-4xl">{step.title}</h3>
             {number ? (
                 <div className={`font-pixel mt-3 text-5xl leading-none ${step.slow ? 'text-[#ff3b30]' : 'text-zinc-100'}`}>
                     <Scramble key={step.key} text={`${ms(step.ms)} ms`} duration={0.5} />
@@ -33,9 +33,16 @@ function StepText({ row, index, total, number }: { row: Row; index: number; tota
                 <span className="sr-only">{`${ms(step.ms)} milliseconds`}</span>
             )}
             {step.slow && <div className="mt-2 font-mono text-[12px] text-[#ff3b30]">the slowest thing the server did</div>}
-            <p className="mt-4 max-w-[56ch] text-[15.5px] leading-relaxed text-zinc-300">{step.detail}</p>
+            <p
+                className={`mt-3 max-w-[56ch] leading-relaxed text-zinc-300 lg:mt-4 lg:text-[15.5px] ${number ? 'text-[15.5px]' : 'text-[14.5px] max-lg:line-clamp-4'}`}
+            >
+                {step.detail}
+            </p>
             {step.why && (
-                <p className="mt-4 max-w-[56ch] border-l-2 border-[#ff3b30]/60 pl-4 text-[15px] leading-relaxed text-zinc-400">
+                // On a phone's pinned stage there is room for one paragraph; the reason waits for wider screens.
+                <p
+                    className={`mt-4 max-w-[56ch] border-l-2 border-[#ff3b30]/60 pl-4 text-[15px] leading-relaxed text-zinc-400 ${number ? '' : 'max-lg:hidden'}`}
+                >
                     <span className="mr-2 font-mono text-[12px] text-[#ff3b30]">why</span>
                     {step.why}
                 </p>
@@ -52,7 +59,7 @@ function StepText({ row, index, total, number }: { row: Row; index: number; tota
 function Rail({ rows, active, onPick }: { rows: Row[]; active: number; onPick: (k: number) => void }) {
     return (
         <div>
-            <div className="flex h-10 items-stretch gap-[3px]" role="list" aria-label="Steps of the request, by duration">
+            <div className="flex h-7 items-stretch gap-[3px] lg:h-10" role="list" aria-label="Steps of the request, by duration">
                 {rows.map((r, k) => {
                     const state = k === active ? 'now' : k < active ? 'past' : 'next';
                     return (
@@ -82,7 +89,7 @@ function Rail({ rows, active, onPick }: { rows: Row[]; active: number; onPick: (
             </div>
             <div className="mt-2 flex justify-between font-mono text-[11.5px] text-zinc-400">
                 <span>fetch()</span>
-                <span>each segment is one step, as wide as it took</span>
+                <span className="max-sm:hidden">each segment is one step, as wide as it took</span>
                 <span>last byte</span>
             </div>
         </div>
@@ -96,7 +103,8 @@ function Rail({ rows, active, onPick }: { rows: Row[]; active: number; onPick: (
  * timings or bytes that step rests on sit under it.
  */
 export function Machine() {
-    const stage = useStage();
+    // Pinned and scroll-driven at every size; only reduced motion gets the plain list.
+    const stage = useMotion();
     const root = useRef<HTMLDivElement>(null);
     const pinned = useRef<HTMLDivElement>(null);
     const number = useRef<HTMLDivElement>(null);
@@ -227,8 +235,8 @@ export function Machine() {
 
     const t = data?.trace;
     const requestLine = (
-        <div className="flex flex-wrap items-center justify-between gap-x-8 gap-y-3 border-b border-white/10 pb-4">
-            <div className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-5 gap-y-1 font-mono text-[12.5px] text-zinc-400">
+        <div className="flex items-center justify-between gap-x-4 gap-y-3 border-b border-white/10 pb-3 lg:gap-x-8 lg:pb-4">
+            <div className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-3 gap-y-0.5 font-mono text-[11.5px] text-zinc-400 lg:gap-x-5 lg:text-[12.5px]">
                 <span className="text-zinc-100">GET /api/stack</span>
                 {status === 'ready' && t ? (
                     <>
@@ -259,9 +267,16 @@ export function Machine() {
                 type="button"
                 onClick={() => void again()}
                 disabled={status === 'sending'}
-                className="jitter rounded-[2px] border border-white/25 px-4 py-2 font-mono text-[12px] tracking-[0.08em] text-zinc-100 uppercase transition-colors hover:border-white active:translate-y-px disabled:opacity-40"
+                className="jitter shrink-0 rounded-[2px] border border-white/25 px-3 py-2 font-mono text-[11px] tracking-[0.08em] text-zinc-100 uppercase transition-colors hover:border-white active:translate-y-px disabled:opacity-40 lg:px-4 lg:text-[12px]"
             >
-                {status === 'waiting' ? 'Send it now' : 'Send it again'}
+                {status === 'waiting' ? (
+                    'Send it now'
+                ) : (
+                    <>
+                        <span className="lg:hidden">Again</span>
+                        <span className="max-lg:hidden">Send it again</span>
+                    </>
+                )}
             </button>
         </div>
     );
@@ -301,29 +316,36 @@ export function Machine() {
     // Pinned: every block has a fixed place and height, so changing steps never moves the frame.
     return (
         <div ref={root}>
-            <div ref={pinned} className="flex h-[100dvh] flex-col pt-20 pb-6">
-                {requestLine}
-                {data && row ? (
-                    <>
-                        <div className="mt-6">
-                            <Rail rows={rows} active={active} onPick={pick} />
-                        </div>
-                        <div className="mt-8 grid min-h-0 flex-1 grid-cols-[minmax(0,5fr)_minmax(0,7fr)] gap-14">
-                            <div className="mx-detail min-h-0 overflow-hidden">
-                                <StepText row={row} index={active} total={rows.length} number={false} />
+            {/* Phones: the time on top, then the step, then its proof filling what is left. Wide: words left, time and proof right. */}
+            <div ref={pinned} className="flex h-[100svh] flex-col pt-16 pb-4 lg:h-[100dvh] lg:justify-center lg:pt-16 lg:pb-6">
+                {/* On tall screens the stage is one centred block of fixed height, not a column with an empty bottom. */}
+                <div className="flex min-h-0 flex-1 flex-col lg:h-[min(84vh,880px)] lg:flex-none">
+                    {requestLine}
+                    {data && row ? (
+                        <>
+                            <div className="mt-4 lg:mt-6">
+                                <Rail rows={rows} active={active} onPick={pick} />
                             </div>
-                            <div className="grid min-h-0 grid-rows-[minmax(90px,20vh)_minmax(0,1fr)] gap-5">
+                            {/* Phones: time, step, proof. Wide: step and time side by side, the proof full width underneath. Fixed rows, so nothing moves between steps. */}
+                            <div className="mt-3 flex min-h-0 flex-1 flex-col gap-3 lg:mt-8 lg:grid lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:grid-rows-[clamp(220px,30vh,300px)_minmax(0,1fr)] lg:gap-x-14 lg:gap-y-6">
+                                <div className="mx-detail shrink-0 overflow-hidden lg:col-start-1 lg:row-start-1 lg:min-h-0">
+                                    <StepText row={row} index={active} total={rows.length} number={false} />
+                                </div>
                                 {/* The step's time, written by the page's bits; this box only says where. */}
-                                <div ref={number} aria-hidden="true" />
-                                <div className="mx-detail min-h-0">
+                                <div
+                                    ref={number}
+                                    aria-hidden="true"
+                                    className="h-[10svh] min-h-[60px] shrink-0 max-lg:order-first lg:col-start-2 lg:row-start-1 lg:h-auto lg:min-h-0"
+                                />
+                                <div className="mx-detail min-h-[96px] flex-1 lg:col-span-2 lg:row-start-2 lg:min-h-0">
                                     <Evidence step={row.step} data={data} />
                                 </div>
                             </div>
-                        </div>
-                    </>
-                ) : (
-                    skeleton
-                )}
+                        </>
+                    ) : (
+                        skeleton
+                    )}
+                </div>
             </div>
         </div>
     );

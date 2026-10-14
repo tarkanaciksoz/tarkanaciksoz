@@ -131,8 +131,8 @@ export default function Home() {
                             <TearDivider />
                             <section id="stack" className="relative scroll-mt-16 pt-10">
                                 <SectionHead title="The tools, and what happens between them">
-                                    Every point is a tool I run, every row a layer. Pick a scenario and scroll: the request flows through the tools it
-                                    really touches, in order, with the reason for each hop.
+                                    Every point is a tool I run; every row is a layer. Pick a scenario and scroll. The request moves through the tools
+                                    it touches, in order, with a note on each hop.
                                 </SectionHead>
                                 <div className="mt-10">
                                     <SectionState
@@ -178,8 +178,8 @@ export default function Home() {
                             <TearDivider />
                             <section id="made" className="relative scroll-mt-16 pt-10">
                                 <SectionHead title="How this page was made">
-                                    One real request to this site, sent as you arrived here. Scroll, and its time pours into each step it took, as
-                                    much as that step really cost; beside each step is the code, SQL or bytes it rests on.
+                                    One real request to this site, sent as you arrived. Scroll, and its time is split across the steps it took. Beside
+                                    each step is the code, SQL or bytes behind it.
                                 </SectionHead>
                                 <div className="mt-10">
                                     <Machine />

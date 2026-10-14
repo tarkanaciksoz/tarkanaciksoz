@@ -24,7 +24,8 @@ const SPHERE = 6500;
 /**
  * The hero's formation: a sphere of 0/1 glyphs turning slowly, brighter on the
  * near side, torn by a short red/cyan band every few seconds. Scrolling the hero
- * away pours it downward into the next section.
+ * away pours it downward into the next section; on a phone, where that column
+ * would run over the text, it bursts outward and fades instead.
  */
 function sphere(anchor: HTMLElement | null, progress: number, t: Targets, time: number) {
     if (!anchor) return t.rest(0, t.n);
@@ -38,6 +39,7 @@ function sphere(anchor: HTMLElement | null, progress: number, t: Targets, time: 
     const ct = Math.cos(tilt);
     const st = Math.sin(tilt);
     const pour = smoothstep(0.02, 0.8, progress);
+    const narrow = t.vw < 1024;
     const tearing = time % 3.6 < 0.28;
     const tearY = cy + Math.sin(time * 1.9) * R * 0.6;
 
@@ -55,11 +57,19 @@ function sphere(anchor: HTMLElement | null, progress: number, t: Targets, time: 
         const sy = cy + y3 * persp;
         const depth = (z3 + R) / (2 * R);
 
-        // Pouring: each bit leaves at its own moment for a falling, swaying column of binary below.
+        // Leaving: each bit goes at its own moment, down a swaying column of binary (wide screens)
+        // or straight out from the centre (phones).
         const leave = smoothstep(0, 1, (pour - t.seed2[i] * 0.4) / 0.6);
-        const fall = t.seed2[i] * t.vh * 2.4;
-        const streamX = cx + Math.sin(fall * 0.006 + time * 0.8) * 40 + (t.seed[i] - 0.5) * 120;
-        const streamY = box.bottom - R * 0.4 + fall;
+        let streamX: number;
+        let streamY: number;
+        if (narrow) {
+            streamX = cx + (sx - cx) * 2.6;
+            streamY = cy + (sy - cy) * 2.6;
+        } else {
+            const fall = t.seed2[i] * t.vh * 2.4;
+            streamX = cx + Math.sin(fall * 0.006 + time * 0.8) * 40 + (t.seed[i] - 0.5) * 120;
+            streamY = box.bottom - R * 0.4 + fall;
+        }
 
         let [r, g, b] = WHITE;
         if (tearing && Math.abs(sy - tearY) < 12) {
@@ -69,7 +79,7 @@ function sphere(anchor: HTMLElement | null, progress: number, t: Targets, time: 
 
         t.x[i] = sx + (streamX - sx) * leave;
         t.y[i] = sy + (streamY - sy) * leave;
-        t.a[i] = (0.14 + 0.78 * depth) * (1 - 0.55 * leave);
+        t.a[i] = (0.14 + 0.78 * depth) * (1 - (narrow ? 1 : 0.55) * leave);
         t.r[i] = r;
         t.g[i] = g;
         t.b[i] = b;
@@ -129,9 +139,10 @@ export function Hero({ profile, bytes }: { profile: Profile | null; bytes: numbe
         <section
             ref={root}
             id="top"
-            className="relative grid min-h-[calc(100dvh-3.5rem)] grid-cols-[minmax(0,1fr)] gap-8 pt-10 pb-16 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] lg:items-center lg:gap-0 lg:pt-4 lg:pb-10"
+            // Phones: words, then the sphere, then the terminal. Wide screens: words and terminal left, sphere right.
+            className="relative grid min-h-[calc(100svh-3.5rem)] grid-cols-[minmax(0,1fr)] content-start gap-6 pt-8 pb-12 lg:min-h-[calc(100dvh-3.5rem)] lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] lg:grid-rows-[auto_auto] lg:content-center lg:gap-x-0 lg:gap-y-12 lg:pt-4 lg:pb-10"
         >
-            <div data-hero="copy" className="relative min-w-0">
+            <div data-hero="copy" className="relative min-w-0 lg:col-start-1 lg:row-start-1 lg:self-end">
                 {profile ? (
                     <SplitReveal
                         as="h1"
@@ -147,14 +158,14 @@ export function Hero({ profile, bytes }: { profile: Profile | null; bytes: numbe
                         &nbsp;
                     </h1>
                 )}
-                <p data-hero="sub" className="mt-7 max-w-[42ch] text-lg leading-relaxed text-zinc-400 sm:text-xl">
+                <p data-hero="sub" className="mt-5 max-w-[42ch] text-[17px] leading-relaxed text-zinc-400 sm:mt-7 sm:text-xl">
                     {profile?.intro ?? ' '}
                 </p>
-                <div data-hero="cta" className="mt-9 flex flex-wrap gap-3">
+                <div data-hero="cta" className="mt-7 grid grid-cols-2 gap-3 sm:mt-9 sm:flex sm:flex-wrap">
                     <a
                         ref={primary}
                         href="#made"
-                        className="jitter group inline-flex items-center gap-2.5 rounded-[2px] bg-zinc-50 px-5 py-3 font-mono text-[12.5px] tracking-[0.08em] whitespace-nowrap text-black uppercase transition-colors hover:bg-[#ff3b30] active:translate-y-px"
+                        className="jitter group inline-flex items-center justify-center gap-2.5 rounded-[2px] bg-zinc-50 px-4 py-3 font-mono text-[12.5px] tracking-[0.08em] whitespace-nowrap text-black uppercase transition-colors hover:bg-[#ff3b30] active:translate-y-px sm:px-5"
                     >
                         Watch a request
                         <ArrowDown size={14} weight="bold" className="transition-transform duration-300 group-hover:translate-y-0.5" />
@@ -162,7 +173,7 @@ export function Hero({ profile, bytes }: { profile: Profile | null; bytes: numbe
                     <a
                         ref={secondary}
                         href="/docs/api"
-                        className="jitter group inline-flex items-center gap-2.5 rounded-[2px] border border-white/25 px-5 py-3 font-mono text-[12.5px] tracking-[0.08em] whitespace-nowrap text-zinc-100 uppercase transition-colors hover:border-white active:translate-y-px"
+                        className="jitter group inline-flex items-center justify-center gap-2.5 rounded-[2px] border border-white/25 px-4 py-3 font-mono text-[12.5px] tracking-[0.08em] whitespace-nowrap text-zinc-100 uppercase transition-colors hover:border-white active:translate-y-px sm:px-5"
                     >
                         API docs
                         <ArrowUpRight
@@ -172,18 +183,15 @@ export function Hero({ profile, bytes }: { profile: Profile | null; bytes: numbe
                         />
                     </a>
                 </div>
-                <div data-hero="term" className="mt-12 max-w-xl">
-                    <Terminal
-                        owner={profile ? shellUser(profile.name) : 'owner'}
-                        intro={profile ? `${profile.role}, ${profile.location}` : 'reading /api/profile'}
-                    />
-                </div>
             </div>
 
             {/* The sphere is drawn by the page-wide bit field; this box only says where. */}
-            <figure className="relative min-w-0">
-                <div ref={anchor} className="h-[46vh] min-h-[300px] w-full lg:h-[min(70vh,680px)]" aria-hidden="true" />
-                <figcaption data-hero="caption" className="mt-2 max-w-[52ch] font-mono text-[12px] text-zinc-400 lg:ml-auto lg:text-right">
+            <figure className="relative min-w-0 lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:self-center">
+                <div ref={anchor} className="h-[min(42svh,340px)] w-full lg:h-[min(70vh,680px)]" aria-hidden="true" />
+                <figcaption
+                    data-hero="caption"
+                    className="mx-auto mt-1 max-w-[46ch] text-center font-mono text-[11.5px] text-zinc-400 lg:mt-2 lg:mr-0 lg:max-w-[52ch] lg:text-right lg:text-[12px]"
+                >
                     {bytes ? (
                         <>
                             Every dot on this page is {bitBudget(bytes).perDot === 1 ? 'one byte' : `${bitBudget(bytes).perDot} bytes`} of{' '}
@@ -195,6 +203,10 @@ export function Hero({ profile, bytes }: { profile: Profile | null; bytes: numbe
                     )}
                 </figcaption>
             </figure>
+
+            <div data-hero="term" className="max-w-xl min-w-0 lg:col-start-1 lg:row-start-2 lg:self-start">
+                <Terminal owner={profile ? shellUser(profile.name) : 'owner'} profile={profile} />
+            </div>
         </section>
     );
 }

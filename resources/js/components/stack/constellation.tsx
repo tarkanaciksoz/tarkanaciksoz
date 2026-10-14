@@ -1,5 +1,5 @@
 import { prefersReducedMotion, remeasure, scrollToY, ScrollTrigger, useGSAP } from '@/lib/gsap';
-import { useStage } from '@/lib/stage';
+import { useMotion, useStage } from '@/lib/stage';
 import type { Flow, StackItem, StackLayer } from '@/types/portfolio';
 import { X } from '@phosphor-icons/react';
 import { animate, stagger } from 'animejs';
@@ -31,7 +31,11 @@ function place(node: Node, maxCols: number, rows: number) {
  */
 export function Constellation({ layers, flows }: { layers: StackLayer[]; flows: Flow[] }) {
     const stage = useStage();
+    const motion = useMotion();
     const root = useRef<HTMLDivElement>(null);
+    const pipe = useRef<HTMLOListElement>(null);
+    const reachedRef = useRef(-1);
+    const [reached, setReached] = useState(-1);
     const pinned = useRef<HTMLDivElement>(null);
     const box = useRef<HTMLDivElement>(null);
     const trigger = useRef<ScrollTrigger | null>(null);
@@ -64,10 +68,84 @@ export function Constellation({ layers, flows }: { layers: StackLayer[]; flows: 
     const inFlow = useMemo(() => new Set(hops.map((h) => h.node.item.id)), [hops]);
     const current = hops[Math.min(hop, hops.length - 1)];
 
+    /**
+     * Phones: the hops are a vertical line, and the request is a stream of bits
+     * running down it to wherever the reader has scrolled. Every hop it has
+     * passed wears a ring.
+     */
+    const pipeline = (t: Targets, time: number) => {
+        const dots = pipe.current?.querySelectorAll<HTMLElement>('[data-dot]');
+        if (!dots?.length) return t.rest(0, t.n);
+        const pts = Array.from(dots, (d) => {
+            const r = d.getBoundingClientRect();
+            return [r.left + r.width / 2, r.top + r.height / 2] as const;
+        });
+        const x = pts[0][0];
+        const y0 = pts[0][1];
+        const headY = Math.min(Math.max(t.vh * 0.58, y0), pts[pts.length - 1][1]);
+        let k = -1;
+        pts.forEach(([, y], j) => {
+            if (y <= headY + 2) k = j;
+        });
+        if (k !== reachedRef.current) {
+            reachedRef.current = k;
+            setReached(k);
+        }
+
+        let i = 0;
+        const len = Math.max(1, headY - y0);
+        const hotFrom = hops.findIndex((h) => h.hot);
+        for (let q = 0; q < 900 && i < t.n; q++, i++) {
+            // Bits fall down the line, continuously, from the first hop to the reader.
+            const y = y0 + ((t.seed[i] * len + time * 70) % len);
+            const nearHead = headY - y < 36;
+            const red = hotFrom >= 0 && y >= pts[hotFrom][1] - 2 && k >= hotFrom;
+            const [cr, cg, cb] = red ? RED : WHITE;
+            t.x[i] = x + (t.seed2[i] - 0.5) * 3.5;
+            t.y[i] = y;
+            t.a[i] = nearHead ? 1 : 0.55;
+            t.r[i] = cr;
+            t.g[i] = cg;
+            t.b[i] = cb;
+            t.s[i] = nearHead ? 3 : 2.2;
+            t.sq[i] = 1;
+        }
+        pts.forEach(([px, py], j) => {
+            if (j > k) return;
+            const [cr, cg, cb] = hops[j]?.hot ? RED : WHITE;
+            for (let q = 0; q < 26 && i < t.n; q++, i++) {
+                const ang = (q / 26) * Math.PI * 2 + time * 0.6;
+                t.x[i] = px + Math.cos(ang) * 7;
+                t.y[i] = py + Math.sin(ang) * 7;
+                t.a[i] = 0.95;
+                t.r[i] = cr;
+                t.g[i] = cg;
+                t.b[i] = cb;
+                t.s[i] = 2.4;
+                t.sq[i] = 1;
+            }
+        });
+        // The head: a pulsing knot where the request is now.
+        for (let q = 0; q < 36 && i < t.n; q++, i++) {
+            const ang = (q / 36) * Math.PI * 2 - time * 2;
+            const rr = 10 + Math.sin(time * 5) * 2;
+            t.x[i] = x + Math.cos(ang) * rr;
+            t.y[i] = headY + Math.sin(ang) * rr;
+            t.a[i] = 1;
+            t.r[i] = WHITE[0];
+            t.g[i] = WHITE[1];
+            t.b[i] = WHITE[2];
+            t.s[i] = 2.6;
+            t.sq[i] = 1;
+        }
+        t.rest(i, t.n);
+    };
+
     // The bits: rings for tools, dotted lines for layers, a stream for the request.
     useBitChapter('stack', root, (t: Targets, time: number) => {
+        if (!stage) return motion ? pipeline(t, time) : t.rest(0, t.n);
         const el = box.current;
-        if (!stage || !el) return t.rest(0, t.n);
+        if (!el) return t.rest(0, t.n);
         const r = el.getBoundingClientRect();
         const w = r.width - LABEL_W;
         const rows = layers.length;
@@ -308,18 +386,33 @@ export function Constellation({ layers, flows }: { layers: StackLayer[]; flows: 
             <div ref={root}>
                 {tabs}
                 <p className="mt-4 max-w-[70ch] text-zinc-400">{flow.summary}</p>
-                <ol className="relative mt-6 border-l border-white/15 pl-5">
-                    {hops.map((h, i) => (
-                        <li key={`${flow.slug}${i}`} className="relative pb-4">
-                            <span className={`absolute top-1.5 -left-[25px] h-2 w-2 ${h.hot ? 'bg-[#ff3b30]' : 'bg-white/60'}`} />
-                            <button type="button" onClick={() => setPicked(h.node.item.id)} className="text-left">
-                                <span className={`block text-[15px] font-medium ${h.hot ? 'text-[#ff3b30]' : 'text-zinc-100'}`}>
-                                    {h.node.item.name}
-                                </span>
-                                <span className="block text-[13.5px] text-zinc-400">{h.note}</span>
-                            </button>
-                        </li>
-                    ))}
+                <ol ref={pipe} className="relative mt-8 border-l border-white/10 pl-7">
+                    {hops.map((h, i) => {
+                        // With motion, a hop wakes up as the stream reaches it; without, all are awake.
+                        const lit = !motion || i <= reached;
+                        return (
+                            <li
+                                key={`${flow.slug}${i}`}
+                                className={`relative pb-7 transition-[opacity,translate] duration-500 ${lit ? 'opacity-100' : 'translate-x-2 opacity-35'}`}
+                            >
+                                <span
+                                    data-dot
+                                    className={`absolute top-[9px] -left-[32px] h-2 w-2 ${
+                                        motion ? 'border border-white/25' : h.hot ? 'bg-[#ff3b30]' : 'bg-white/60'
+                                    }`}
+                                />
+                                <button type="button" onClick={() => setPicked(h.node.item.id)} className="flex items-start gap-3 text-left">
+                                    {h.node.item.icon && <img src={h.node.item.icon} alt="" className="mt-1 h-4 w-4 shrink-0 opacity-80" />}
+                                    <span>
+                                        <span className={`block text-[17px] font-medium ${h.hot ? 'text-[#ff3b30]' : 'text-zinc-50'}`}>
+                                            {h.node.item.name}
+                                        </span>
+                                        <span className="mt-0.5 block text-[14.5px] leading-snug text-zinc-400">{h.note}</span>
+                                    </span>
+                                </button>
+                            </li>
+                        );
+                    })}
                 </ol>
                 {pickedNode && (
                     <div className="mt-2 border border-[#ff3b30]/60 p-4" onKeyDown={(e) => e.key === 'Escape' && close()}>
@@ -336,13 +429,14 @@ export function Constellation({ layers, flows }: { layers: StackLayer[]; flows: 
         <div ref={root}>
             <div ref={pinned} className="flex h-[100dvh] flex-col justify-center pt-16 pb-6">
                 {tabs}
-                <p className="mt-3 max-w-[70ch] text-zinc-400">{flow.summary}</p>
+                {/* Two lines reserved, so a short summary does not shift the centred stage. */}
+                <p className="mt-3 line-clamp-2 min-h-[3.25em] max-w-[70ch] text-zinc-400">{flow.summary}</p>
 
                 <div
                     ref={box}
                     role="group"
                     aria-label={`Constellation of tools: ${flow.title}. Arrow keys move between tools, Enter opens one.`}
-                    className="relative mt-6 h-[min(56vh,520px)] min-h-[360px]"
+                    className="relative mt-6 h-[min(60vh,640px)] min-h-[360px]"
                 >
                     {layers.map((layer, row) => (
                         <div
@@ -431,7 +525,8 @@ export function Constellation({ layers, flows }: { layers: StackLayer[]; flows: 
                         )}
                     </p>
                     <span className="font-mono text-[12px] text-zinc-400">
-                        <span className="text-[#ff3b30]">red numbers</span> count the services using a tool
+                        <span className="text-[#ff3b30]">red numbers</span> count the services using a tool; a{' '}
+                        <span className="text-[#ff3b30]">red hop</span> is where the time goes
                     </span>
                 </div>
             </div>

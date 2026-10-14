@@ -50,7 +50,7 @@ return [
         /*
          * Description rendered on the home page of the API documentation (`/docs/api`).
          */
-        'description' => 'The API behind this site. Every page reads from these endpoints, and every response carries an X-Trace-Id you can pass to /traces/{id} to see exactly how it was produced: the spans, the SQL with its query plan, and the source lines each step came from.',
+        'description' => 'The API behind this site. Every page reads from these endpoints, and every response carries an X-Trace-Id you can pass to /traces/{id} to see how it was produced: the spans, the SQL with its query plan, and the source lines behind each step.',
     ],
 
     'ui' => [

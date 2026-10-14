@@ -59,7 +59,7 @@ function Sql({ step }: { step: Step }) {
     const plan = step.explain ?? [];
     return (
         <Frame
-            label="the statement, and the database's own plan for it"
+            label="the statement, and the database's plan for it"
             foot={step.source ? `called from ${step.source.file}:${step.source.line_start}` : 'issued by the framework'}
         >
             <pre className="px-4 py-3 font-mono text-[12.5px] leading-relaxed whitespace-pre-wrap text-zinc-100">{step.sql}</pre>
@@ -108,7 +108,7 @@ function TraceRecord({ trace, focus }: { trace: Trace; focus: string }) {
     if (focus === 'unattributed') {
         const phased = trace.phases.filter((p) => p.name !== 'controller').reduce((n, p) => n + p.ms, 0);
         const unclaimed = Math.max(0, trace.unattributed_ms - phased);
-        lines.push({ text: `// ${phased.toFixed(3)} of it is boot, middleware and the response`, hit: false });
+        lines.push({ text: `// ${phased.toFixed(3)} ms of it is boot, middleware and the response`, hit: false });
         lines.push({ text: `// ${unclaimed.toFixed(3)} ms is claimed by nothing`, hit: true });
     }
     return (
@@ -183,8 +183,8 @@ function Body({ raw }: { raw: string }) {
     const bytes = new TextEncoder().encode(raw).length;
     return (
         <Frame label={`response body, ${bytes.toLocaleString()} bytes`} aside={<span className="text-zinc-200">crc32 {crc32(raw)}</span>}>
-            <div className="px-4 py-3">
-                <HexDump source={raw} rows={7} />
+            <div className="h-full px-4 py-3">
+                <HexDump source={raw} />
             </div>
         </Frame>
     );

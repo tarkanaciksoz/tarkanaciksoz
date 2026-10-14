@@ -22,7 +22,19 @@ export function Contact({ profile }: { profile: Profile | null }) {
     const arrow = useMagnetic<HTMLSpanElement>(0.5);
 
     // The page ends where every request does: the bits spell its status.
-    useTextFormation('contact', root, '200', (vw, vh) => (vw < 1024 ? null : { x: vw * 0.58, y: vh * 0.18, w: vw * 0.36, h: vh * 0.34 }), 0.25);
+    // On a phone it sits in its own strip above the question; on a wide screen, beside it.
+    const strip = useRef<HTMLDivElement>(null);
+    useTextFormation(
+        'contact',
+        root,
+        '200',
+        (vw, vh) => {
+            if (vw >= 1024) return { x: vw * 0.58, y: vh * 0.18, w: vw * 0.36, h: vh * 0.34 };
+            const r = strip.current?.getBoundingClientRect();
+            return r && r.width ? { x: r.left, y: r.top, w: r.width, h: r.height } : null;
+        },
+        0.25,
+    );
 
     const { contextSafe } = useGSAP(
         () => {
@@ -68,13 +80,14 @@ export function Contact({ profile }: { profile: Profile | null }) {
 
     return (
         <section ref={root} id="contact" className="relative pt-10">
+            <div ref={strip} aria-hidden="true" className="mb-6 h-[24vw] max-h-[160px] lg:hidden" />
             <SplitReveal
                 text="Want to see a different request?"
                 className="max-w-[14ch] text-5xl leading-[0.95] font-semibold tracking-[-0.045em] text-zinc-50 sm:text-7xl xl:text-8xl"
             />
             <p className="contact-read mt-6 max-w-[52ch] text-xl leading-relaxed text-zinc-300">
                 Write with an endpoint or a problem. If it is interesting, it becomes the next thing traced here: a write under a lock, a rejected
-                token, the request after the rate limit, a job that outlives its response.
+                token, a request after the rate limit, a job that outlives its response.
             </p>
 
             {primary && (

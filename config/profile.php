@@ -9,7 +9,7 @@ return [
     'focus' => [
         'Laravel APIs that a small team can keep alive',
         'Turning repeated work into shared packages',
-        'Moving servers without moving downtime',
+        'Moving servers without downtime',
     ],
     'links' => [
         ['label' => 'Email', 'href' => 'mailto:hello@example.com'],
