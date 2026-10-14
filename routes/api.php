@@ -16,4 +16,3 @@ Route::get('flows', [FlowController::class, 'index'])->name('api.flows');
 
 Route::get('traces/{id}', [TraceController::class, 'show'])->name('api.traces.show');
 Route::post('traces/{id}/client-timing', [TraceController::class, 'storeClientTiming'])->name('api.traces.client');
-

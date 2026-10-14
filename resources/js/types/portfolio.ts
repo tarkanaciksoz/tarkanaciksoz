@@ -27,8 +27,6 @@ export type System = {
     lesson: string | null;
     tags: string[];
     scale: string | null;
-    /** Public path of the photograph the page dithers, or null. */
-    image: string | null;
 };
 
 export type Decision = { id: number; title: string; body: string };

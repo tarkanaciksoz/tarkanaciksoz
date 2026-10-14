@@ -9,7 +9,7 @@ class System extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['slug', 'title', 'summary', 'problem', 'approach', 'lesson', 'tags', 'scale', 'image', 'visible', 'position'];
+    protected $fillable = ['slug', 'title', 'summary', 'problem', 'approach', 'lesson', 'tags', 'scale', 'visible', 'position'];
 
     protected function casts(): array
     {

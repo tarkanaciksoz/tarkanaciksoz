@@ -7,8 +7,8 @@ import { apply, commonPrefix, complete, ENDPOINTS, FILES } from './completion';
 type Line = { id: number; kind: 'cmd' | 'out' | 'err'; text: string };
 type Menu = { token: string; items: string[]; index: number };
 
-const HISTORY_KEY = 'glassbox:terminal-history';
-const HOST = 'glassbox';
+const HISTORY_KEY = 'tarkanaciksoz:terminal-history';
+const HOST = 'tarkanaciksoz';
 const HOME = '/home/guest';
 
 const HELP = [

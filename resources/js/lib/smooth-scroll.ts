@@ -3,7 +3,7 @@ import { gsap, prefersReducedMotion, ScrollSmoother } from './gsap';
 const HEADER_OFFSET = 64;
 
 /** Fired when the nav jumps across the page; the glitch overlay listens for it. */
-export const JUMP_EVENT = 'glassbox:jump';
+export const JUMP_EVENT = 'tarkanaciksoz:jump';
 
 /**
  * Scrolls to an element; under ScrollSmoother it glides, otherwise GSAP eases the native scroll.

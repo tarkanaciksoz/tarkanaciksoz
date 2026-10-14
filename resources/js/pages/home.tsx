@@ -110,7 +110,7 @@ export default function Home() {
 
     return (
         <>
-            <Head title={p ? `${p.name}, ${p.role}` : 'Backend & infrastructure engineer'} />
+            <Head title={p ? `${p.name} · ${p.role}` : 'Tarkan Açıksöz · Backend & infrastructure engineer'} />
 
             <div className="grain relative min-h-screen bg-[#050506] font-sans text-zinc-100 selection:bg-[#ff3b30] selection:text-black">
                 <a

@@ -132,10 +132,6 @@ class PortfolioSeeder extends Seeder
         ];
 
         foreach ($systems as $i => $system) {
-            // A photograph only when the file is really there; the page draws none otherwise.
-            $image = "/images/systems/{$system['slug']}.jpg";
-            $system['image'] = file_exists(public_path($image)) ? $image : null;
-
             System::updateOrCreate(['slug' => $system['slug']], $system + ['position' => $i + 1, 'visible' => true]);
         }
     }

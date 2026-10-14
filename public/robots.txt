@@ -1,2 +1,6 @@
 User-agent: *
-Disallow:
+Allow: /
+# Trace records are short-lived, per-request diagnostics.
+Disallow: /api/traces/
+
+Sitemap: https://tarkanaciksoz.com/sitemap.xml

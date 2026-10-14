@@ -3,7 +3,7 @@ import { gsap, prefersReducedMotion, SCRAMBLE_CHARS, useGSAP } from '@/lib/gsap'
 import { markIntroDone } from '@/lib/intro';
 import { useEffect, useRef, useState } from 'react';
 
-const SEEN_KEY = 'glassbox:booted';
+const SEEN_KEY = 'tarkanaciksoz:booted';
 const BANDS = 9;
 /** What the page waits for before it opens: its own document, its fonts, and the first two answers from its API. */
 const WAITS = ['document', 'fonts', '/api/profile', '/api/stack'];

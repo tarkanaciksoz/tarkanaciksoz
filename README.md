@@ -1,46 +1,43 @@
-# Glass Box
+# Tarkan Açıksöz
 
-A personal site for a backend engineer, built so that the thing it claims to be good at is
-visible rather than described. The home page draws a map of the stack; that map is not
-markup, it is `GET /api/stack` answering. A second tab sends that same request again and
-shows what happened inside it: the browser's own timings, every span on the server, the SQL
-with the database's query plan, and the lines of deployed code each step came from.
+Backend & infrastructure engineer in Istanbul. I build and run the APIs, payments, push and
+AI pipelines behind mobile apps, and the servers they run on.
 
-## Stack
+**[tarkanaciksoz.com](https://tarkanaciksoz.com)** ·
+[LinkedIn](https://www.linkedin.com/in/tarkan-a%C3%A7%C4%B1ks%C3%B6z-5b2863208) ·
+[tarkanaciksoz@gmail.com](mailto:tarkanaciksoz@gmail.com)
 
-Laravel 12 · PHP 8.3 · Inertia · React 19 · TypeScript · Tailwind 4 · SQLite · Pest ·
-Scramble (OpenAPI).
+---
 
-## Running it
+## This repository is the site
 
-```bash
-composer install && npm install
-cp .env.example .env && php artisan key:generate
-touch database/database.sqlite
-php artisan migrate --seed
-npm run build            # or: npm run dev
-php artisan serve
-```
+The page at [tarkanaciksoz.com](https://tarkanaciksoz.com) is built so that what it claims
+is visible rather than described:
 
-The site is at `/`, the generated API documentation at `/docs/api`.
+- **Everything on it comes from its own API.** The stack map, the systems, the rules and the
+  profile are JSON from the endpoints below; there is no content in the HTML.
+- **Every dot on the page is a byte.** The field of bits that draws the sphere, the stack and
+  the numbers is one point per byte of the `GET /api/stack` response that drew it.
+- **It traces itself.** The page sends a real request as you arrive and walks you through
+  where its milliseconds went: DNS, connection, the server's boot and middleware, the
+  controller, the cache, the SQL with the database's own query plan, and the bytes on the
+  wire, each beside the code or record it rests on.
 
 ## The API
-
-Everything the page shows comes from these endpoints. There is no data in the HTML.
 
 | Method | Path | Returns |
 | --- | --- | --- |
 | GET | `/api/profile` | Name, role, location, focus and links |
 | GET | `/api/stack` | Stack layers with the tools inside them |
+| GET | `/api/flows` | Scenarios routed through the stack, hop by hop |
 | GET | `/api/systems` | Systems built, each with problem, approach and lesson |
 | GET | `/api/decisions` | Operating rules and what taught each one |
 | GET | `/api/traces/{id}` | A recorded request: spans, SQL, query plans, source |
 | POST | `/api/traces/{id}/client-timing` | Browser timings the server cannot measure |
-| POST | `/api/terminal` | Run a command in the home-page terminal; streams plain text |
-| GET | `/api/terminal/fs` | The terminal's directory tree, shared with tab completion |
 
 Responses are cached for five minutes and carry `Cache-Status`. The public rate limit is 60
-requests a minute per address.
+requests a minute per address. The OpenAPI document is generated from the code and served
+at [`/docs/api`](https://tarkanaciksoz.com/docs/api).
 
 ## Tracing
 
@@ -80,23 +77,28 @@ How it fits together:
 Traces live in the cache for `TRACING_TTL_MINUTES` (default one day). Turn the whole thing
 off with `TRACING_ENABLED=false`; set `APP_COMMIT` in deploys where `git` is not available.
 
-## Terminal
+## The front end
 
-The prompt under `whoami` is a shell played by `gpt-5.6-luna` through the Responses API.
-It streams its output as it is written, never breaks character, grounds file contents in
-the site's own data (`cat stack.json` is the real stack), and teases anyone who tries to
-break the box. Tab completion, history and the prompt's working directory are local.
+Inertia with React 19 and TypeScript, Tailwind 4. One Three.js points field (a lazy chunk)
+carries every visual: sections register a shape and the bits spring to it as the section
+crosses the middle of the screen. GSAP drives the pinned sections and smooth scrolling.
+The terminal under `whoami` is a small client-side shell: `help`, `ls`, `cat`, and `curl`
+against the real API.
+
+## Running it
 
 ```bash
-OPENAI_API_KEY=sk-...                 # without it the shell prints "backend offline"
-OPENAI_TERMINAL_MODEL=gpt-5.6-luna
-TERMINAL_PER_MINUTE=15                # per address
-TERMINAL_PER_DAY=200                  # per address
-TERMINAL_SITE_PER_DAY=3000            # whole site, so a public endpoint cannot run up a bill
+composer install && npm install
+cp .env.example .env && php artisan key:generate
+# for local work: APP_URL=http://localhost:8000, APP_ENV=local, APP_DEBUG=true
+touch database/database.sqlite
+php artisan migrate --seed
+npm run dev              # or: npm run build
+php artisan serve
 ```
 
-Requests are sent with `store: false`, reasoning effort `none` and a 400-token output cap;
-the last six exchanges are replayed so the session stays consistent.
+Laravel 12 · PHP 8.3+ · Inertia · React 19 · TypeScript · Tailwind 4 · Three.js · GSAP ·
+SQLite · Pest · Scramble.
 
 ## Tests
 
@@ -105,12 +107,12 @@ php artisan test
 ./vendor/bin/pint
 ```
 
-54 tests cover the endpoints, the cache behaviour (second request touches no database), the
-recorded spans, the attribute explanations, the query plans, the unattributed arithmetic,
-the terminal's streaming, grounding, errors and rate limits, and the OpenAPI document.
+The tests cover the endpoints, the cache behaviour (a second request touches no database),
+the recorded spans, the attribute explanations, the query plans, the unattributed
+arithmetic and the OpenAPI document.
 
 ## Content
 
-Content lives in the database, seeded from `database/seeders/PortfolioSeeder.php`; the
-stack map's rows come from `database/seeders/data/stack.json`. Nothing in this repository
-names an employer, a server, an internal package or an application.
+Content lives in the database, seeded from `database/seeders/PortfolioSeeder.php`; the stack
+map comes from `database/seeders/data/stack.json` and the scenarios from
+`database/seeders/data/flows.php`.

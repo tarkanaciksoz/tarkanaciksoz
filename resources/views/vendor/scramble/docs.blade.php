@@ -4,6 +4,11 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
     <meta name="color-scheme" content="{{ $config->renderer()->get('theme', 'light') }}">
+    <meta name="description" content="The API behind tarkanaciksoz.com: every response carries a trace id you can open.">
+    <link rel="canonical" href="{{ rtrim(config('app.url'), '/') }}/docs/api">
+    <link rel="icon" href="/favicon.ico" sizes="32x32">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png">
     <title>{{ $config->get('ui.title') ?? config('app.name') . ' - API Docs' }}</title>
 
     <script src="https://unpkg.com/@stoplight/elements@8.4.2/web-components.min.js"></script>

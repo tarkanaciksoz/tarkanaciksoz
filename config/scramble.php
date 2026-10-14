@@ -54,7 +54,7 @@ return [
     ],
 
     'ui' => [
-        'title' => 'Glass Box API',
+        'title' => 'tarkanaciksoz.com API',
     ],
 
     /*
