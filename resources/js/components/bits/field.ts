@@ -193,15 +193,19 @@ export class BitField {
     }
 
     resize() {
+        // The drawing surface is the canvas's own CSS size (the large viewport on phones);
+        // shapes are laid out in the visible viewport, which is what vw and vh describe.
+        const w = this.canvas.clientWidth || window.innerWidth;
+        const h = this.canvas.clientHeight || window.innerHeight;
         this.vw = window.innerWidth;
         this.vh = window.innerHeight;
         this.t.vw = this.vw;
         this.t.vh = this.vh;
-        this.renderer.setSize(this.vw, this.vh, false);
+        this.renderer.setSize(w, h, false);
         this.camera.left = 0;
-        this.camera.right = this.vw;
+        this.camera.right = w;
         this.camera.top = 0;
-        this.camera.bottom = this.vh;
+        this.camera.bottom = h;
         this.camera.updateProjectionMatrix();
     }
 

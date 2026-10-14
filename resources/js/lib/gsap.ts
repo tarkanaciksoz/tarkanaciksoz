@@ -9,6 +9,19 @@ import { SplitText } from 'gsap/SplitText';
 // Registered once, here, so every component imports GSAP from one place.
 gsap.registerPlugin(useGSAP, ScrollTrigger, ScrollSmoother, ScrollToPlugin, SplitText, ScrambleTextPlugin);
 
+// A phone's address bar shows and hides as you scroll; that is not a layout change worth
+// re-measuring every trigger for, and doing so mid-scroll makes the page jump.
+ScrollTrigger.config({ ignoreMobileResize: true });
+
+/** Touch-only devices scroll natively: transform-driven scrolling trembles under momentum scrolling. */
+export const touchOnly = () => typeof window !== 'undefined' && ScrollTrigger.isTouch === 1;
+
+/**
+ * anticipatePin for a pin: it helps native scrolling, where the pin lands a frame late,
+ * and only makes the pin twitch on entry when ScrollSmoother is moving the page.
+ */
+export const anticipatePin = () => (ScrollSmoother.get() ? 0 : 1);
+
 export const prefersReducedMotion = () => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 /** Characters a scramble cycles through: the same alphabet as the bytes in the background. */

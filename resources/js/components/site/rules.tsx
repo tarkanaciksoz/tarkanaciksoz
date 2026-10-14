@@ -16,12 +16,17 @@ export function Rules({ state }: { state: Loadable<Decision[]> }) {
     const decisions = state.data ?? [];
     const [open, setOpen] = useState(0);
 
-    // While the rules are on screen, the page's bits spell the open rule's number in the right-hand
-    // third, stopping short of the column of open/close marks.
+    // While the rules are on screen, the page's bits spell the open rule's number: in the
+    // right-hand third on wide screens, stopping short of the open/close marks; on narrow ones,
+    // in a strip at the top of the open rule's text, so they follow it down the list.
     useTextFormation('rules', root, open >= 0 ? String(open + 1).padStart(2, '0') : null, (vw, vh) => {
-        if (vw < 1024) return null;
-        const w = Math.min(vw * 0.24, 420);
-        return { x: contentRight(vw) - 64 - w, y: vh * 0.3, w, h: vh * 0.36 };
+        if (vw >= 1024) {
+            const w = Math.min(vw * 0.24, 420);
+            return { x: contentRight(vw) - 64 - w, y: vh * 0.3, w, h: vh * 0.36 };
+        }
+        const r = root.current?.querySelectorAll<HTMLElement>('.rule-row')[open]?.querySelector('[data-rule-number]')?.getBoundingClientRect();
+        if (!r || r.height < 8 || r.bottom < 0 || r.top > vh) return null;
+        return { x: r.left, y: r.top, w: r.width, h: r.height };
     });
 
     const { contextSafe } = useGSAP(
@@ -123,9 +128,15 @@ export function Rules({ state }: { state: Loadable<Decision[]> }) {
                                     inert={!isOpen}
                                     aria-hidden={!isOpen}
                                 >
-                                    <p className="max-w-[58ch] pt-1 pb-8 pl-[3.25rem] text-lg leading-relaxed text-zinc-400 sm:pl-[5.5rem]">
-                                        {d.body}
-                                    </p>
+                                    <div className="pt-1 pb-8 pl-[3.25rem] sm:pl-[5.5rem]">
+                                        {/* Narrow screens: the bits draw this rule's number here. */}
+                                        <div
+                                            data-rule-number
+                                            aria-hidden="true"
+                                            className="mb-3 h-[26vw] max-h-[150px] w-[min(66vw,300px)] motion-reduce:hidden lg:hidden"
+                                        />
+                                        <p className="max-w-[58ch] text-lg leading-relaxed text-zinc-400">{d.body}</p>
+                                    </div>
                                 </div>
                             </li>
                         );

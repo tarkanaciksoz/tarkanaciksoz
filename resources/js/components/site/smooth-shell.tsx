@@ -1,4 +1,4 @@
-import { prefersReducedMotion, ScrollSmoother } from '@/lib/gsap';
+import { prefersReducedMotion, ScrollSmoother, touchOnly } from '@/lib/gsap';
 import { useLayoutEffect, useState, type ReactNode } from 'react';
 
 /**
@@ -11,9 +11,11 @@ export function SmoothShell({ children }: { children: ReactNode }) {
     const [ready, setReady] = useState(false);
 
     useLayoutEffect(() => {
-        const smoother = prefersReducedMotion()
-            ? null
-            : ScrollSmoother.create({ wrapper: '#smooth-wrapper', content: '#smooth-content', smooth: 1.15, effects: true, smoothTouch: false });
+        // Phones keep their own scrolling: it is smoother than anything moved by transforms.
+        const smoother =
+            prefersReducedMotion() || touchOnly()
+                ? null
+                : ScrollSmoother.create({ wrapper: '#smooth-wrapper', content: '#smooth-content', smooth: 1.15, effects: true, smoothTouch: false });
         setReady(true);
         return () => smoother?.kill();
     }, []);

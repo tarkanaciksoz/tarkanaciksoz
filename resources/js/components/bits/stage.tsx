@@ -1,4 +1,4 @@
-import { prefersReducedMotion } from '@/lib/gsap';
+import { prefersReducedMotion, touchOnly } from '@/lib/gsap';
 import { createContext, useContext, useEffect, useRef, type ReactNode, type RefObject } from 'react';
 import type { BitField } from './field';
 import { WHITE, type ChapterFrame, type Targets } from './types';
@@ -47,7 +47,14 @@ export function BitStage({ bytes, children }: { bytes: number | null; children: 
         if (!el || !bytes || prefersReducedMotion()) return;
         let alive = true;
         let instance: BitField | null = null;
-        const onResize = () => instance?.resize();
+        let width = window.innerWidth;
+        const onResize = () => {
+            // On a phone, a height-only change is the address bar; the canvas already spans
+            // the large viewport, and re-aiming every bit at it would make them shiver.
+            if (touchOnly() && window.innerWidth === width) return;
+            width = window.innerWidth;
+            instance?.resize();
+        };
 
         import('./field').then(({ BitField }) => {
             if (!alive) return;
@@ -70,7 +77,7 @@ export function BitStage({ bytes, children }: { bytes: number | null; children: 
 
     return (
         <Ctx.Provider value={chapters.current}>
-            <canvas ref={canvas} className="pointer-events-none fixed inset-0 z-[1] h-full w-full" aria-hidden="true" />
+            <canvas ref={canvas} className="pointer-events-none fixed inset-x-0 top-0 z-[1] h-lvh w-full" aria-hidden="true" />
             {children}
         </Ctx.Provider>
     );

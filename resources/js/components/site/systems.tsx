@@ -1,4 +1,4 @@
-import { gsap, prefersReducedMotion, remeasure, ScrollTrigger, useGSAP } from '@/lib/gsap';
+import { anticipatePin, gsap, prefersReducedMotion, remeasure, ScrollTrigger, useGSAP } from '@/lib/gsap';
 import { useMotion, useStage } from '@/lib/stage';
 import type { System } from '@/types/portfolio';
 import {
@@ -208,7 +208,7 @@ export function Systems({ state }: { state: Loadable<System[]> }) {
                 pin: true,
                 start: 'top top',
                 end: () => `+=${(n - 1) * window.innerHeight * PER_SYSTEM}`,
-                anticipatePin: 1,
+                anticipatePin: anticipatePin(),
                 invalidateOnRefresh: true,
                 onUpdate: (self) => {
                     gsap.set(bar.current, { scaleX: self.progress });

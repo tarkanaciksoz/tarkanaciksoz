@@ -1,4 +1,4 @@
-import { contentScrollY, prefersReducedMotion, remeasure, scrollToY, ScrollTrigger, useGSAP } from '@/lib/gsap';
+import { anticipatePin, contentScrollY, prefersReducedMotion, remeasure, scrollToY, ScrollTrigger, useGSAP } from '@/lib/gsap';
 import { useMotion, useStage } from '@/lib/stage';
 import type { Flow, StackItem, StackLayer } from '@/types/portfolio';
 import { X } from '@phosphor-icons/react';
@@ -244,7 +244,7 @@ export function Constellation({ layers, flows }: { layers: StackLayer[]; flows: 
                 pin: true,
                 start: 'top top',
                 end: () => `+=${(maxHops - 1) * window.innerHeight * PER_HOP}`,
-                anticipatePin: 1,
+                anticipatePin: anticipatePin(),
                 invalidateOnRefresh: true,
                 onUpdate: (self) => {
                     head.current = self.progress * (hopCount.current - 1);
@@ -407,7 +407,12 @@ export function Constellation({ layers, flows }: { layers: StackLayer[]; flows: 
                                     }`}
                                 />
                                 <button type="button" onClick={() => setPicked(h.node.item.id)} className="flex items-start gap-3 text-left">
-                                    {h.node.item.icon && <img src={h.node.item.icon} alt="" className="mt-1 h-4 w-4 shrink-0 opacity-80" />}
+                                    {/* The slot stays when a tool has no mark, so every name starts on the same line. */}
+                                    {h.node.item.icon ? (
+                                        <img src={h.node.item.icon} alt="" className="mt-1 h-4 w-4 shrink-0 opacity-80" />
+                                    ) : (
+                                        <span aria-hidden="true" className="mt-1 h-4 w-4 shrink-0" />
+                                    )}
                                     <span>
                                         <span className={`block text-[17px] font-medium ${h.hot ? 'text-[#ff3b30]' : 'text-zinc-50'}`}>
                                             {h.node.item.name}

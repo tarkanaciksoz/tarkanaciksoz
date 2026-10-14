@@ -1,5 +1,5 @@
 import { apiGet, fetchTrace, ms, postClientTiming } from '@/lib/api';
-import { gsap, prefersReducedMotion, remeasure, scrollToY, ScrollTrigger, useGSAP } from '@/lib/gsap';
+import { anticipatePin, gsap, prefersReducedMotion, remeasure, scrollToY, ScrollTrigger, useGSAP } from '@/lib/gsap';
 import { useMagnetic } from '@/lib/magnetic';
 import { useMotion } from '@/lib/stage';
 import type { StackResponse } from '@/types/portfolio';
@@ -191,7 +191,7 @@ export function Machine() {
                 pin: true,
                 start: 'top top',
                 end: () => `+=${Math.max(1, n - 1) * window.innerHeight * PER_STEP}`,
-                anticipatePin: 1,
+                anticipatePin: anticipatePin(),
                 invalidateOnRefresh: true,
                 onUpdate: (self) => {
                     const i = Math.round(self.progress * (n - 1));
