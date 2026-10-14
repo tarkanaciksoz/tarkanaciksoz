@@ -1,5 +1,6 @@
 import { apiGet, fetchTrace, ms, postClientTiming } from '@/lib/api';
-import { gsap, prefersReducedMotion, ScrollTrigger, useGSAP } from '@/lib/gsap';
+import { gsap, prefersReducedMotion, ScrollSmoother, scrollToY, ScrollTrigger, useGSAP } from '@/lib/gsap';
+import { useMagnetic } from '@/lib/magnetic';
 import type { StackResponse } from '@/types/portfolio';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Scramble } from '../motion/scramble';
@@ -63,6 +64,7 @@ export function Machine() {
     const activeRef = useRef(0);
     const busy = useRef(false);
     const pinnable = usePinnable();
+    const sendButton = useMagnetic<HTMLButtonElement>(0.25);
 
     const [status, setStatus] = useState<Status>('waiting');
     const [data, setData] = useState<RunData | null>(null);
@@ -179,11 +181,11 @@ export function Machine() {
             const t = trigger.current;
             const n = rows.length;
             if (t && n > 1) {
-                gsap.to(window, { scrollTo: t.start + ((t.end - t.start) * i) / (n - 1), duration: 0.6, ease: 'power2.inOut' });
+                scrollToY(t.start + ((t.end - t.start) * i) / (n - 1));
                 return;
             }
             const el = root.current?.querySelectorAll<HTMLElement>('.mx-step')[i];
-            if (el) gsap.to(window, { scrollTo: { y: el, offsetY: 120 }, duration: prefersReducedMotion() ? 0 : 0.6, ease: 'power2.inOut' });
+            if (el) scrollToY(Math.max(0, ScrollSmoother.get()?.offset(el, 'top 120px') ?? el.getBoundingClientRect().top + window.scrollY - 120));
         },
         [rows.length],
     );
@@ -191,7 +193,7 @@ export function Machine() {
     const again = useCallback(async () => {
         const top = trigger.current?.start;
         await send();
-        if (top !== undefined) window.scrollTo({ top });
+        if (top !== undefined) scrollToY(top);
     }, [send]);
 
     const t = data?.trace;
@@ -224,6 +226,7 @@ export function Machine() {
                 )}
             </p>
             <button
+                ref={sendButton}
                 type="button"
                 onClick={() => void again()}
                 disabled={status === 'sending'}

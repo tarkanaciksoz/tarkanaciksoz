@@ -5,11 +5,15 @@ import { heroLayers } from '@/components/hero/layers';
 import { Machine } from '@/components/machine/machine';
 import { Ambient } from '@/components/signal/ambient';
 import { TearDivider } from '@/components/signal/tear-divider';
+import { JumpGlitch, ScrollProgress } from '@/components/site/chrome';
 import { Contact } from '@/components/site/contact';
+import { Intro } from '@/components/site/intro';
+import { LiveMarquee } from '@/components/site/live-marquee';
 import { Nav } from '@/components/site/nav';
 import { Rules } from '@/components/site/rules';
 import { SectionHead } from '@/components/site/section-head';
 import { SectionState, type Loadable } from '@/components/site/section-state';
+import { SmoothShell } from '@/components/site/smooth-shell';
 import { Systems } from '@/components/site/systems';
 import { apiGet, fetchTrace } from '@/lib/api';
 import { ScrollTrigger } from '@/lib/gsap';
@@ -49,7 +53,8 @@ function useScrollRefresh() {
             }, 160);
         };
         const observer = new ResizeObserver(refresh);
-        observer.observe(document.body);
+        // Under ScrollSmoother the body's height is derived; the content is what actually grows.
+        observer.observe(document.getElementById('smooth-content') ?? document.body);
         document.fonts?.ready.then(refresh);
         return () => {
             window.clearTimeout(timer);
@@ -114,78 +119,85 @@ export default function Home() {
 
             <div className="grain relative min-h-screen bg-[#050506] font-sans text-zinc-100 selection:bg-[#ff3b30] selection:text-black">
                 <Ambient />
+                <ScrollProgress />
                 <Nav name={p?.name ?? null} ready={!systems.loading && !decisions.loading} />
+                <JumpGlitch />
+                <Intro />
 
-                <main className="relative z-10 mx-auto w-full max-w-[1600px] px-4 pt-14 pb-16 sm:px-8 lg:px-12">
-                    <Hero profile={p} layers={layers} request={request} />
+                <SmoothShell>
+                    <main className="relative z-10 mx-auto w-full max-w-[1600px] px-4 pt-14 pb-16 sm:px-8 lg:px-12">
+                        <Hero profile={p} layers={layers} request={request} />
 
-                    <TearDivider />
-                    <section id="stack" className="relative scroll-mt-16 pt-10">
-                        <SectionHead title="The tools, and what happens between them">
-                            Every chip is a tool I run. Pick a scenario and a signal walks the chips it really touches, in order, with the reason for
-                            each hop.
-                        </SectionHead>
-                        <div className="mt-10">
-                            <SectionState
-                                state={board}
-                                endpoint="/api/stack"
-                                skeleton={
-                                    <>
-                                        <div className="flex gap-2">
-                                            {[150, 180, 160, 210].map((w) => (
-                                                <div key={w} className="h-10 animate-pulse bg-white/[0.04]" style={{ width: w }} />
-                                            ))}
-                                        </div>
-                                        <div className="mt-6 aspect-[1200/650] animate-pulse border border-white/8 bg-white/[0.02]" />
-                                    </>
-                                }
-                            >
-                                {board.data && (
-                                    <>
-                                        <CircuitBoard layers={board.data.stack.data} flows={board.data.flows} />
-                                        <p className="mt-8 font-mono text-[12.5px] text-zinc-500">
-                                            This board is not markup. It is{' '}
-                                            <a
-                                                href="/docs/api"
-                                                className="text-zinc-100 underline decoration-white/25 underline-offset-4 hover:decoration-white"
-                                            >
-                                                GET /api/stack
-                                            </a>{' '}
-                                            and{' '}
-                                            <a
-                                                href="/docs/api"
-                                                className="text-zinc-100 underline decoration-white/25 underline-offset-4 hover:decoration-white"
-                                            >
-                                                GET /api/flows
-                                            </a>
-                                            : {board.data.stack.meta.items} tools, {board.data.flows.length} scenarios.
-                                        </p>
-                                    </>
-                                )}
-                            </SectionState>
+                        <div className="mt-6 sm:mt-10">
+                            <LiveMarquee />
                         </div>
-                    </section>
+                        <section id="stack" className="relative scroll-mt-16 pt-10">
+                            <SectionHead title="The tools, and what happens between them">
+                                Every chip is a tool I run. Pick a scenario and a signal walks the chips it really touches, in order, with the reason
+                                for each hop.
+                            </SectionHead>
+                            <div className="mt-10">
+                                <SectionState
+                                    state={board}
+                                    endpoint="/api/stack"
+                                    skeleton={
+                                        <>
+                                            <div className="flex gap-2">
+                                                {[150, 180, 160, 210].map((w) => (
+                                                    <div key={w} className="h-10 animate-pulse bg-white/[0.04]" style={{ width: w }} />
+                                                ))}
+                                            </div>
+                                            <div className="mt-6 aspect-[1200/650] animate-pulse border border-white/8 bg-white/[0.02]" />
+                                        </>
+                                    }
+                                >
+                                    {board.data && (
+                                        <>
+                                            <CircuitBoard layers={board.data.stack.data} flows={board.data.flows} />
+                                            <p className="mt-8 font-mono text-[12.5px] text-zinc-500">
+                                                This board is not markup. It is{' '}
+                                                <a
+                                                    href="/docs/api"
+                                                    className="text-zinc-100 underline decoration-white/25 underline-offset-4 hover:decoration-white"
+                                                >
+                                                    GET /api/stack
+                                                </a>{' '}
+                                                and{' '}
+                                                <a
+                                                    href="/docs/api"
+                                                    className="text-zinc-100 underline decoration-white/25 underline-offset-4 hover:decoration-white"
+                                                >
+                                                    GET /api/flows
+                                                </a>
+                                                : {board.data.stack.meta.items} tools, {board.data.flows.length} scenarios.
+                                            </p>
+                                        </>
+                                    )}
+                                </SectionState>
+                            </div>
+                        </section>
 
-                    <TearDivider />
-                    <section id="made" className="relative scroll-mt-16 pt-10">
-                        <SectionHead title="How this page was made">
-                            One real request to this site, from fetch() to the last byte, sent as you arrived here. Every bar was measured; under each
-                            step is the code, SQL or bytes it rests on.
-                        </SectionHead>
-                        <div className="mt-10">
-                            <Machine />
-                        </div>
-                    </section>
+                        <TearDivider />
+                        <section id="made" className="relative scroll-mt-16 pt-10">
+                            <SectionHead title="How this page was made">
+                                One real request to this site, from fetch() to the last byte, sent as you arrived here. Every bar was measured; under
+                                each step is the code, SQL or bytes it rests on.
+                            </SectionHead>
+                            <div className="mt-10">
+                                <Machine />
+                            </div>
+                        </section>
 
-                    <TearDivider />
-                    <Systems state={systems} />
+                        <TearDivider />
+                        <Systems state={systems} />
 
-                    <TearDivider />
-                    <Rules state={decisions} />
+                        <TearDivider />
+                        <Rules state={decisions} />
 
-                    <TearDivider />
-                    <Contact profile={p} />
-                </main>
+                        <TearDivider />
+                        <Contact profile={p} />
+                    </main>
+                </SmoothShell>
             </div>
         </>
     );

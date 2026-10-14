@@ -24,17 +24,13 @@ export function Nav({ name, ready }: { name: string | null; ready: boolean }) {
             const reduced = prefersReducedMotion();
 
             ScrollTrigger.create({
-                start: 'top -140',
+                start: 0,
                 end: 'max',
                 onUpdate: (self) => {
-                    gsap.to(header, {
-                        yPercent: self.direction === 1 ? -100 : 0,
-                        duration: reduced ? 0 : 0.35,
-                        ease: 'power2.out',
-                        overwrite: 'auto',
-                    });
+                    // Hidden only while reading down past the first screenful; anywhere near the top it stays.
+                    const hide = self.direction === 1 && self.scroll() > 140;
+                    gsap.to(header, { yPercent: hide ? -100 : 0, duration: reduced ? 0 : 0.35, ease: 'power2.out', overwrite: 'auto' });
                 },
-                onLeaveBack: () => gsap.to(header, { yPercent: 0, duration: 0.2, overwrite: 'auto' }),
             });
 
             LINKS.filter(([href]) => href.startsWith('#')).forEach(([href]) => {

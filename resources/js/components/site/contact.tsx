@@ -1,4 +1,5 @@
-import { gsap, prefersReducedMotion, SCRAMBLE_CHARS, useGSAP } from '@/lib/gsap';
+import { gsap, prefersReducedMotion, SCRAMBLE_CHARS, SplitText, useGSAP } from '@/lib/gsap';
+import { useMagnetic } from '@/lib/magnetic';
 import type { Profile } from '@/types/portfolio';
 import { ArrowUpRight } from '@phosphor-icons/react';
 import { useRef } from 'react';
@@ -17,9 +18,27 @@ export function Contact({ profile }: { profile: Profile | null }) {
     const rest = links.filter((l) => l !== primary);
     const address = primary?.href.replace(/^mailto:/, '') ?? '';
 
+    const arrow = useMagnetic<HTMLSpanElement>(0.5);
+
     const { contextSafe } = useGSAP(
         () => {
-            if (!primary || prefersReducedMotion()) return;
+            if (prefersReducedMotion()) return;
+            // The paragraph lights up word by word at reading pace, tied to the scroll.
+            SplitText.create('.contact-read', {
+                type: 'words',
+                onSplit: (self) =>
+                    gsap.fromTo(
+                        self.words,
+                        { color: '#3f3f46' },
+                        {
+                            color: '#d4d4d8',
+                            stagger: 0.08,
+                            ease: 'none',
+                            scrollTrigger: { trigger: '.contact-read', start: 'top 85%', end: 'bottom 45%', scrub: true },
+                        },
+                    ),
+            });
+            if (!primary) return;
             gsap.from('.contact-line', {
                 y: 30,
                 autoAlpha: 0,
@@ -29,7 +48,7 @@ export function Contact({ profile }: { profile: Profile | null }) {
                 scrollTrigger: { trigger: '.contact-line', start: 'top 90%', once: true },
             });
         },
-        { scope: root, dependencies: [address] },
+        { scope: root, dependencies: [address], revertOnUpdate: true },
     );
 
     const decode = contextSafe((e: React.MouseEvent<HTMLAnchorElement>) => {
@@ -48,7 +67,7 @@ export function Contact({ profile }: { profile: Profile | null }) {
                 text="Want to see a different request?"
                 className="max-w-[14ch] text-5xl leading-[0.95] font-semibold tracking-[-0.045em] text-zinc-50 sm:text-7xl xl:text-8xl"
             />
-            <p className="mt-6 max-w-[52ch] text-lg leading-relaxed text-zinc-400">
+            <p className="contact-read mt-6 max-w-[52ch] text-xl leading-relaxed text-zinc-300">
                 Write with an endpoint or a problem. If it is interesting, it becomes the next thing traced here: a write under a lock, a rejected
                 token, the request after the rate limit, a job that outlives its response.
             </p>
@@ -65,11 +84,13 @@ export function Contact({ profile }: { profile: Profile | null }) {
                         <span data-label={address}>{address}</span>
                         <span className="absolute inset-x-0 -bottom-1 h-px origin-left scale-x-0 bg-[#ff3b30] transition-transform duration-500 group-hover:scale-x-100" />
                     </span>
-                    <ArrowUpRight
-                        aria-hidden="true"
-                        weight="light"
-                        className="size-6 shrink-0 text-zinc-500 transition-[color,translate] duration-300 group-hover:translate-x-1 group-hover:-translate-y-1 group-hover:text-[#ff3b30] sm:size-10"
-                    />
+                    <span ref={arrow} className="inline-flex shrink-0">
+                        <ArrowUpRight
+                            aria-hidden="true"
+                            weight="light"
+                            className="size-6 text-zinc-500 transition-colors duration-300 group-hover:text-[#ff3b30] sm:size-10"
+                        />
+                    </span>
                 </a>
             )}
 

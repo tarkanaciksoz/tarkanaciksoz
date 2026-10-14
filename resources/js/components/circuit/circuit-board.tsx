@@ -33,6 +33,7 @@ export function CircuitBoard({ layers, flows }: { layers: StackLayer[]; flows: F
     const rootRef = useRef<HTMLDivElement>(null);
     const svgRef = useRef<SVGSVGElement>(null);
     const packetRef = useRef<SVGGElement>(null);
+    const scanRef = useRef<SVGGElement>(null);
     const pathRefs = useRef<(SVGPathElement | null)[]>([]);
     const landed = useRef(false);
 
@@ -73,6 +74,25 @@ export function CircuitBoard({ layers, flows }: { layers: StackLayer[]; flows: F
             seat.complete();
         };
     }, [inView, layers]);
+
+    // Each new scenario starts with a sweep, so the change of state is seen, not just read.
+    useEffect(() => {
+        const scan = scanRef.current;
+        if (!inView || !scan || prefersReducedMotion()) return;
+        const sweep = animate(scan, {
+            translateY: [0, BOARD.h + 40],
+            opacity: [
+                { to: 1, duration: 80 },
+                { to: 1, duration: 520 },
+                { to: 0, duration: 200 },
+            ],
+            duration: 800,
+            ease: 'inOutSine',
+        });
+        return () => {
+            sweep.revert();
+        };
+    }, [inView, flowIndex, run]);
 
     // The sequencer: one Anime.js timeline per run. Each hop draws its trace while
     // the packet rides the same path, then the chip it reaches takes the signal.
@@ -223,6 +243,17 @@ export function CircuitBoard({ layers, flows }: { layers: StackLayer[]; flows: F
                         <pattern id="cbDither" width="3" height="3" patternUnits="userSpaceOnUse">
                             <rect width="1" height="1" fill="rgba(255,255,255,.22)" />
                         </pattern>
+                        <linearGradient id="cbScan" x1="0" x2="1" y1="0" y2="0">
+                            <stop offset="0" stopColor="#ff3b30" stopOpacity="0" />
+                            <stop offset="0.3" stopColor="#ff3b30" />
+                            <stop offset="0.5" stopColor="#ffffff" />
+                            <stop offset="0.7" stopColor="#22d3ee" />
+                            <stop offset="1" stopColor="#22d3ee" stopOpacity="0" />
+                        </linearGradient>
+                        <linearGradient id="cbScanTrail" x1="0" x2="0" y1="0" y2="1">
+                            <stop offset="0" stopColor="#ffffff" stopOpacity="0" />
+                            <stop offset="1" stopColor="#ffffff" stopOpacity="0.06" />
+                        </linearGradient>
                         <filter id="cbGlow" x="-100%" y="-100%" width="300%" height="300%">
                             <feGaussianBlur stdDeviation="3" />
                         </filter>
@@ -353,6 +384,12 @@ export function CircuitBoard({ layers, flows }: { layers: StackLayer[]; flows: F
                             );
                         }),
                     )}
+
+                    {/* A scan line sweeps the board whenever a new scenario takes over. */}
+                    <g ref={scanRef} opacity="0" pointerEvents="none">
+                        <rect x="0" y="-1" width={BOARD.w} height="2" fill="url(#cbScan)" />
+                        <rect x="0" y="-40" width={BOARD.w} height="40" fill="url(#cbScanTrail)" />
+                    </g>
 
                     <g ref={packetRef} className="cb-packet">
                         <rect x="-7" y="-7" width="14" height="14" fill="#fff" opacity=".22" filter="url(#cbGlow)" />

@@ -1,5 +1,7 @@
 import { ms } from '@/lib/api';
 import { gsap, prefersReducedMotion, useGSAP } from '@/lib/gsap';
+import { introDone } from '@/lib/intro';
+import { useMagnetic } from '@/lib/magnetic';
 import type { Profile } from '@/types/portfolio';
 import { ArrowDown, ArrowUpRight } from '@phosphor-icons/react';
 import { useRef } from 'react';
@@ -16,15 +18,21 @@ export type HeroRequest = { status: number; serverMs: number; cache: string | nu
  */
 export function Hero({ profile, layers, request }: { profile: Profile | null; layers: SceneLayer[] | null; request: HeroRequest | null }) {
     const root = useRef<HTMLElement>(null);
+    const primary = useMagnetic<HTMLAnchorElement>(0.3);
+    const secondary = useMagnetic<HTMLAnchorElement>(0.3);
 
     useGSAP(
         () => {
             if (prefersReducedMotion()) return;
-            gsap.timeline({ delay: 0.15, defaults: { ease: 'power3.out' } })
+            // Everything below the headline waits for the boot screen to open, then follows it in.
+            const entrance = gsap
+                .timeline({ paused: true, delay: 0.15, defaults: { ease: 'power3.out' } })
                 .from('[data-hero="sub"]', { y: 18, autoAlpha: 0, duration: 0.9 }, 0.5)
                 .from('[data-hero="cta"] > *', { y: 14, autoAlpha: 0, duration: 0.7, stagger: 0.08 }, 0.65)
                 .from('[data-hero="term"]', { y: 24, autoAlpha: 0, duration: 1 }, 0.8)
+                .from('[data-hero="figure"]', { autoAlpha: 0, scale: 0.94, duration: 1.4, ease: 'expo.out' }, 0.2)
                 .from('[data-hero="caption"]', { autoAlpha: 0, duration: 1 }, 1.1);
+            introDone.then(() => entrance.play());
 
             // The words leave a little faster than the page, so the box is the last thing to go.
             gsap.to('[data-hero="copy"]', {
@@ -64,6 +72,7 @@ export function Hero({ profile, layers, request }: { profile: Profile | null; la
                 </p>
                 <div data-hero="cta" className="mt-9 flex flex-wrap gap-3">
                     <a
+                        ref={primary}
                         href="#made"
                         className="jitter group inline-flex items-center gap-2.5 rounded-[2px] bg-zinc-50 px-5 py-3 font-mono text-[12.5px] tracking-[0.08em] whitespace-nowrap text-black uppercase transition-colors hover:bg-[#ff3b30] active:translate-y-px"
                     >
@@ -71,6 +80,7 @@ export function Hero({ profile, layers, request }: { profile: Profile | null; la
                         <ArrowDown size={14} weight="bold" className="transition-transform duration-300 group-hover:translate-y-0.5" />
                     </a>
                     <a
+                        ref={secondary}
                         href="/docs/api"
                         className="jitter group inline-flex items-center gap-2.5 rounded-[2px] border border-white/25 px-5 py-3 font-mono text-[12.5px] tracking-[0.08em] whitespace-nowrap text-zinc-100 uppercase transition-colors hover:border-white active:translate-y-px"
                     >
@@ -88,7 +98,7 @@ export function Hero({ profile, layers, request }: { profile: Profile | null; la
             </div>
 
             {/* The box bleeds to the right edge of the window; the copy keeps the grid. */}
-            <figure className="relative min-w-0 lg:-mr-12">
+            <figure data-hero="figure" data-speed="0.85" className="relative min-w-0 lg:-mr-12">
                 <GlassCanvas layers={layers} className="h-[48vh] min-h-[320px] w-full lg:h-[min(72vh,700px)]" />
                 <figcaption data-hero="caption" className="mt-2 font-mono text-[12px] text-zinc-500">
                     {request === 'failed' ? (

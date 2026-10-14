@@ -186,7 +186,9 @@
     }
 
     /* The site is dark by request: off-black, never #000, and the browser chrome agrees. */
-    html:has(#app) {
+    html:has(#app),
+    html:has(#app) body {
+        /* Under ScrollSmoother the page's own wrapper is fixed, so the body is what shows below the first screen. */
         background: #050506;
         color-scheme: dark;
     }
@@ -194,7 +196,8 @@
 
 /*
   Stacking, page-wide: 0 the ambient canvas, 10 main content, 20 sticky bars inside
-  a section, 40 the fixed nav. Nothing else sets a z-index.
+  a section, 40 the fixed nav, 45 the scroll progress line, 50 the boot screen and
+  the jump glitch. Nothing else sets a z-index.
 */
 
 /* ---------------------------------------------------------------------------

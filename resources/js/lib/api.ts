@@ -11,6 +11,28 @@ export type ApiResult<T> = {
     timing: ClientTiming | null;
 };
 
+/** One call this page made to its own API, as the page saw it. */
+export type LogEntry = { method: string; path: string; status: number; ms: number; cache: string | null };
+
+const entries: LogEntry[] = [];
+const listeners = new Set<(entry: LogEntry) => void>();
+
+/** Every request the page has made so far, in order; the boot screen and the marquee read it. */
+export const requestLog = {
+    entries: (): readonly LogEntry[] => entries,
+    subscribe(listener: (entry: LogEntry) => void): () => void {
+        listeners.add(listener);
+        return () => listeners.delete(listener);
+    },
+};
+
+function record(entry: LogEntry) {
+    entries.push(entry);
+    listeners.forEach((listener) => listener(entry));
+}
+
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
 function readTiming(url: string, fallbackMs: number): ClientTiming | null {
     if (typeof performance === 'undefined' || !performance.getEntriesByType) return null;
 
@@ -39,6 +61,7 @@ export async function apiGet<T>(path: string): Promise<ApiResult<T>> {
     const raw = await response.text();
     const body = JSON.parse(raw) as T;
     const elapsed = performance.now() - started;
+    record({ method: 'GET', path, status: response.status, ms: round2(elapsed), cache: response.headers.get('Cache-Status') });
 
     return {
         body,
@@ -52,16 +75,27 @@ export async function apiGet<T>(path: string): Promise<ApiResult<T>> {
 
 /** Posts the browser's own numbers so one record holds both halves of the request. */
 export async function postClientTiming(traceId: string, timing: ClientTiming): Promise<void> {
-    await fetch(`/api/traces/${traceId}/client-timing`, {
+    const started = performance.now();
+    const response = await fetch(`/api/traces/${traceId}/client-timing`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
         body: JSON.stringify(timing),
-    }).catch(() => undefined);
+    }).catch(() => null);
+    if (response)
+        record({
+            method: 'POST',
+            path: '/api/traces/{id}/client-timing',
+            status: response.status,
+            ms: round2(performance.now() - started),
+            cache: null,
+        });
 }
 
 export async function fetchTrace(traceId: string): Promise<Trace | null> {
     try {
+        const started = performance.now();
         const response = await fetch(`/api/traces/${traceId}`, { headers: { Accept: 'application/json' } });
+        record({ method: 'GET', path: '/api/traces/{id}', status: response.status, ms: round2(performance.now() - started), cache: null });
         if (!response.ok) return null;
         const json = (await response.json()) as { data: Trace };
         return json.data;

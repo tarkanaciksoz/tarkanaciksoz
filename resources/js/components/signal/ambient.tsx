@@ -1,3 +1,4 @@
+import { contentScrollY } from '@/lib/gsap';
 import { useEffect, useRef } from 'react';
 
 /*
@@ -87,7 +88,7 @@ export function Ambient() {
         };
 
         /** A point somewhere in the visible part of the page, in document coordinates. */
-        const pointInView = (margin = 0.12) => ({ x: rand(margin, 1 - margin) * W, y: window.scrollY + rand(margin, 1 - margin) * H });
+        const pointInView = (margin = 0.12) => ({ x: rand(margin, 1 - margin) * W, y: contentScrollY() + rand(margin, 1 - margin) * H });
         const diag = () => Math.hypot(W, H);
 
         /** One streak at a random angle, entering from off-screen and crossing the view. */
@@ -219,7 +220,7 @@ export function Ambient() {
         const mono = (px: number) => `${px}px "Geist Mono", ui-monospace, monospace`;
 
         const draw = () => {
-            const sy = window.scrollY;
+            const sy = contentScrollY();
             const top = sy - 20;
             const bottom = sy + H + 20;
             ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -315,8 +316,8 @@ export function Ambient() {
             let lastY = -1;
             const still = () => {
                 raf = requestAnimationFrame(still);
-                if (window.scrollY === lastY) return;
-                lastY = window.scrollY;
+                if (contentScrollY() === lastY) return;
+                lastY = contentScrollY();
                 draw();
             };
             raf = requestAnimationFrame(still);

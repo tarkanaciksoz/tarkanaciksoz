@@ -1,4 +1,4 @@
-import { gsap, prefersReducedMotion, ScrollTrigger, useGSAP } from '@/lib/gsap';
+import { gsap, prefersReducedMotion, SCRAMBLE_CHARS, ScrollTrigger, useGSAP } from '@/lib/gsap';
 import type { Decision } from '@/types/portfolio';
 import { Plus } from '@phosphor-icons/react';
 import { useRef, useState } from 'react';
@@ -27,6 +27,12 @@ export function Rules({ state }: { state: Loadable<Decision[]> }) {
         },
         { scope: root, dependencies: [decisions.length] },
     );
+
+    const decode = contextSafe((e: React.PointerEvent<HTMLButtonElement>) => {
+        const n = e.currentTarget.querySelector('[data-n]');
+        if (!n || prefersReducedMotion()) return;
+        gsap.to(n, { duration: 0.4, scrambleText: { text: n.getAttribute('data-n')!, chars: SCRAMBLE_CHARS, speed: 1 }, overwrite: true });
+    });
 
     const choose = contextSafe((index: number) => {
         const next = index === open ? -1 : index;
@@ -74,11 +80,13 @@ export function Rules({ state }: { state: Loadable<Decision[]> }) {
                                 <button
                                     type="button"
                                     onClick={() => choose(i)}
+                                    onPointerEnter={decode}
                                     aria-expanded={isOpen}
                                     aria-controls={`rule-${d.id}`}
                                     className="group grid w-full grid-cols-[2.5rem_minmax(0,1fr)_auto] items-baseline gap-3 py-2.5 text-left sm:grid-cols-[4.5rem_minmax(0,1fr)_auto] sm:gap-4"
                                 >
                                     <span
+                                        data-n={String(i + 1).padStart(2, '0')}
                                         className={`font-pixel text-lg transition-colors sm:text-2xl ${isOpen ? 'text-[#ff3b30]' : 'text-zinc-700 group-hover:text-zinc-400'}`}
                                     >
                                         {String(i + 1).padStart(2, '0')}
