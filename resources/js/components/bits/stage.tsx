@@ -1,7 +1,7 @@
 import { prefersReducedMotion } from '@/lib/gsap';
 import { createContext, useContext, useEffect, useRef, type ReactNode, type RefObject } from 'react';
 import type { BitField } from './field';
-import type { ChapterFrame, Targets } from './types';
+import { WHITE, type ChapterFrame, type Targets } from './types';
 
 type Chapter = { section: RefObject<HTMLElement | null>; frame: ChapterFrame };
 type Registry = Map<string, Chapter>;
@@ -52,7 +52,7 @@ export function BitStage({ bytes, children }: { bytes: number | null; children: 
         import('./field').then(({ BitField }) => {
             if (!alive) return;
             try {
-                instance = new BitField(el, bitBudget(bytes).count);
+                instance = new BitField(el, bitBudget(bytes).count, WHITE);
             } catch {
                 return;
             }

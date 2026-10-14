@@ -1,5 +1,7 @@
 import * as THREE from 'three';
-import { WHITE, type ChapterFrame, type Targets } from './types';
+// Types only: a runtime import from ./types would tie this lazy chunk to the page's chunk,
+// and the build manifest would lose the page entry the HTML asks for.
+import type { ChapterFrame, Targets } from './types';
 
 const VERT = /* glsl */ `
     attribute vec4 aColor;
@@ -93,6 +95,8 @@ export class BitField {
     constructor(
         private canvas: HTMLCanvasElement,
         n: number,
+        /** Colour of a bit at rest, passed in by the stage for the reason above. */
+        private restColor: readonly [number, number, number],
     ) {
         this.n = n;
         this.renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: false, powerPreference: 'default' });
@@ -176,9 +180,9 @@ export class BitField {
             t.x[i] = this.restX[i] * t.vw;
             t.y[i] = this.restY[i] * t.vh;
             t.a[i] = 0.045;
-            t.r[i] = WHITE[0];
-            t.g[i] = WHITE[1];
-            t.b[i] = WHITE[2];
+            t.r[i] = this.restColor[0];
+            t.g[i] = this.restColor[1];
+            t.b[i] = this.restColor[2];
             t.s[i] = 7;
             t.sq[i] = 0;
         }
