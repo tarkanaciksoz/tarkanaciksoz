@@ -1,4 +1,4 @@
-import { prefersReducedMotion, remeasure, scrollToY, ScrollTrigger, useGSAP } from '@/lib/gsap';
+import { contentScrollY, prefersReducedMotion, remeasure, scrollToY, ScrollTrigger, useGSAP } from '@/lib/gsap';
 import { useMotion, useStage } from '@/lib/stage';
 import type { Flow, StackItem, StackLayer } from '@/types/portfolio';
 import { X } from '@phosphor-icons/react';
@@ -67,6 +67,10 @@ export function Constellation({ layers, flows }: { layers: StackLayer[]; flows: 
     );
     const inFlow = useMemo(() => new Set(hops.map((h) => h.node.item.id)), [hops]);
     const current = hops[Math.min(hop, hops.length - 1)];
+    // Read by the pin's onUpdate, so a scenario change does not have to rebuild the pin.
+    const hopCount = useRef(hops.length);
+    hopCount.current = hops.length;
+    const maxHops = useMemo(() => Math.max(0, ...flows.map((fl) => fl.steps.length)), [flows]);
 
     /**
      * Phones: the hops are a vertical line, and the request is a stream of bits
@@ -229,11 +233,12 @@ export function Constellation({ layers, flows }: { layers: StackLayer[]; flows: 
         t.rest(i, t.n);
     });
 
-    // Pinned: scrolling walks the request through its hops.
+    // Pinned: scrolling walks the request through its hops. The pin is as long as the
+    // longest scenario and outlives scenario changes: tearing it down and measuring again
+    // while the page glides back to its start left the smoother stuck at the old position.
     useGSAP(
         () => {
-            if (!stage || !pinned.current || hops.length < 2) return;
-            const maxHops = Math.max(...flows.map((fl) => fl.steps.length));
+            if (!stage || !pinned.current || maxHops < 2) return;
             trigger.current = ScrollTrigger.create({
                 trigger: pinned.current,
                 pin: true,
@@ -242,7 +247,7 @@ export function Constellation({ layers, flows }: { layers: StackLayer[]; flows: 
                 anticipatePin: 1,
                 invalidateOnRefresh: true,
                 onUpdate: (self) => {
-                    head.current = self.progress * (hops.length - 1);
+                    head.current = self.progress * (hopCount.current - 1);
                     const h = Math.round(head.current);
                     setHop((prev) => (prev === h ? prev : h));
                 },
@@ -252,7 +257,7 @@ export function Constellation({ layers, flows }: { layers: StackLayer[]; flows: 
                 trigger.current = null;
             };
         },
-        { scope: root, dependencies: [stage, hops.length, flowIndex], revertOnUpdate: true },
+        { scope: root, dependencies: [stage, maxHops], revertOnUpdate: true },
     );
 
     // The first time the stage is seen, the names settle in from the middle out.
@@ -281,9 +286,9 @@ export function Constellation({ layers, flows }: { layers: StackLayer[]; flows: 
         setFlowIndex(index);
         setHop(0);
         head.current = 0;
-        // A new scenario starts from its first hop: back to the top of the pin.
+        // A new scenario starts from its first hop: back to the top of the pin, unless already there.
         const t = trigger.current;
-        if (t) scrollToY(t.start + 1);
+        if (t && Math.abs(contentScrollY() - (t.start + 1)) > 2) scrollToY(t.start + 1);
     }, []);
 
     const close = useCallback(() => {
