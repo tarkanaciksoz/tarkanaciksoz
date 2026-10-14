@@ -10,12 +10,12 @@ export type RunData = { trace: Trace; client: ClientTiming | null; raw: string; 
 /** A titled block of proof: what the claim on the left rests on. */
 function Frame({ label, aside, children, foot }: { label: ReactNode; aside?: ReactNode; children: ReactNode; foot?: ReactNode }) {
     return (
-        <figure className="flex min-h-0 flex-col border border-white/10 bg-[#08080a]">
+        <figure className="flex h-full min-h-0 flex-col border border-white/10 bg-[#08080a]">
             <figcaption className="flex flex-wrap items-baseline justify-between gap-2 border-b border-white/10 px-4 py-2 font-mono text-[12px] text-zinc-400">
                 <span className="min-w-0 break-all">{label}</span>
                 {aside}
             </figcaption>
-            <div className="min-h-0 overflow-auto">{children}</div>
+            <div className="min-h-0 flex-1 overflow-auto">{children}</div>
             {foot && <div className="border-t border-white/10 px-4 py-2 font-mono text-[11.5px] text-zinc-400">{foot}</div>}
         </figure>
     );
@@ -104,6 +104,13 @@ function TraceRecord({ trace, focus }: { trace: Trace; focus: string }) {
         { text: `"leaf_ms": ${trace.leaf_ms},`, hit: false },
         { text: `"unattributed_ms": ${trace.unattributed_ms},`, hit: focus === 'unattributed' },
     ];
+    // The record's unattributed time still holds boot, middleware and the response; say how much of it nothing claimed.
+    if (focus === 'unattributed') {
+        const phased = trace.phases.filter((p) => p.name !== 'controller').reduce((n, p) => n + p.ms, 0);
+        const unclaimed = Math.max(0, trace.unattributed_ms - phased);
+        lines.push({ text: `// ${phased.toFixed(3)} of it is boot, middleware and the response`, hit: false });
+        lines.push({ text: `// ${unclaimed.toFixed(3)} ms is claimed by nothing`, hit: true });
+    }
     return (
         <Frame label={`GET /api/traces/${trace.id}`} foot="The same record this view was drawn from.">
             <Lines lines={lines.map((l, i) => ({ n: i + 1, ...l }))} />
@@ -200,9 +207,11 @@ export function Evidence({ step, data }: { step: Step; data: RunData }) {
             return <Body raw={data.raw} />;
         case 'unattributed': {
             const share = Math.min(0.9, step.ms / Math.max(data.trace.duration_ms, 0.001));
+            // Static only when there is something to show: a few hundredths of a millisecond is not worth noise.
+            if (share < 0.02) return <TraceRecord trace={data.trace} focus={step.key} />;
             return (
-                <div className="grid gap-3">
-                    <div className="relative h-20 overflow-hidden border border-white/10">
+                <div className="grid h-full grid-rows-[5rem_minmax(0,1fr)] gap-3">
+                    <div className="relative overflow-hidden border border-white/10">
                         <NoiseField className="absolute inset-0 h-full w-full" density={0.06 + share * 0.6} />
                     </div>
                     <TraceRecord trace={data.trace} focus={step.key} />

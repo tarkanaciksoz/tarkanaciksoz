@@ -21,6 +21,16 @@ export const SCRAMBLE_CHARS = '0123456789ABCDEF';
  */
 export const contentScrollY = () => ScrollSmoother.get()?.scrollTop() ?? window.scrollY;
 
+/**
+ * Re-measures every trigger in page order. Pins arrive late (after their data),
+ * and a trigger further down that was measured before a pin above it existed
+ * would otherwise keep a start that ignores the pin's scroll distance.
+ */
+export function remeasure() {
+    ScrollTrigger.sort();
+    ScrollTrigger.refresh();
+}
+
 /** Scrolls the page to a position, smoothly when the smoother is running. */
 export function scrollToY(y: number, duration = 0.6) {
     const smoother = ScrollSmoother.get();

@@ -14,7 +14,7 @@ import { SmoothShell } from '@/components/site/smooth-shell';
 import { Systems } from '@/components/site/systems';
 import { Constellation } from '@/components/stack/constellation';
 import { apiGet } from '@/lib/api';
-import { ScrollTrigger } from '@/lib/gsap';
+import { remeasure } from '@/lib/gsap';
 import { enableSmoothAnchors } from '@/lib/smooth-scroll';
 import type { Decision, Flow, Profile, StackResponse, System } from '@/types/portfolio';
 import { Head } from '@inertiajs/react';
@@ -45,10 +45,7 @@ function useScrollRefresh() {
         let timer = 0;
         const refresh = () => {
             window.clearTimeout(timer);
-            timer = window.setTimeout(() => {
-                ScrollTrigger.sort();
-                ScrollTrigger.refresh();
-            }, 160);
+            timer = window.setTimeout(remeasure, 160);
         };
         const observer = new ResizeObserver(refresh);
         // Under ScrollSmoother the body's height is derived; the content is what actually grows.

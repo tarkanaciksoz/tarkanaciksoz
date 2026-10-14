@@ -90,8 +90,7 @@ export function Hero({ profile, bytes }: { profile: Profile | null; bytes: numbe
     const primary = useMagnetic<HTMLAnchorElement>(0.3);
     const secondary = useMagnetic<HTMLAnchorElement>(0.3);
 
-    // Active from the first frame: the hero is on screen at load.
-    useBitChapter('hero', root, (t, time) => sphere(anchor.current, progress.current, t, time), { start: 'top bottom', end: 'bottom 55%' });
+    useBitChapter('hero', root, (t, time) => sphere(anchor.current, progress.current, t, time));
 
     useGSAP(() => {
         const st = ScrollTrigger.create({

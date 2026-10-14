@@ -38,33 +38,43 @@ export function sampleText(text: string, font: string, cols: number, aspect: num
 }
 
 /**
- * A photograph as 1-bit dots: brightness, a low black point and lifted mid-tones
- * (these photographs are mostly shadow), then an ordered dither, like the rest of the page.
+ * An icon as dots, in two tones: its outline dense and bright, its duotone fill
+ * a sparse dither. Returns triples (x, y, tone) normalised to the box, the icon
+ * centred and as large as the box allows.
  */
-export async function sampleImage(src: string, cols: number, aspect: number): Promise<Float32Array> {
-    const img = new Image();
-    img.decoding = 'async';
-    img.src = src;
-    await img.decode();
-    const w = cols;
-    const h = Math.max(1, Math.round(cols / aspect));
-    const c = document.createElement('canvas');
-    c.width = w;
-    c.height = h;
-    const g = c.getContext('2d', { willReadFrequently: true })!;
-    const scale = Math.max(w / img.naturalWidth, h / img.naturalHeight);
-    g.drawImage(img, (w - img.naturalWidth * scale) / 2, (h - img.naturalHeight * scale) / 2, img.naturalWidth * scale, img.naturalHeight * scale);
-    const px = g.getImageData(0, 0, w, h).data;
-    const out: number[] = [];
-    for (let y = 0; y < h; y++) {
-        for (let x = 0; x < w; x++) {
-            const o = (y * w + x) * 4;
-            const v = (0.2126 * px[o] + 0.7152 * px[o + 1] + 0.0722 * px[o + 2]) / 255;
-            const lum = Math.min(1, Math.pow(Math.max(0, (v - 0.05) / 0.95), 0.55) * 1.35);
-            if (lum > BAYER4[(y % 4) * 4 + (x % 4)]) out.push((x + 0.5) / w, (y + 0.5) / h);
+export async function sampleIcon(svg: string, cols: number, aspect: number): Promise<Float32Array> {
+    const url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }));
+    try {
+        const img = new Image();
+        img.src = url;
+        await img.decode();
+        const w = cols;
+        const h = Math.max(1, Math.round(cols / aspect));
+        const c = document.createElement('canvas');
+        c.width = w;
+        c.height = h;
+        const g = c.getContext('2d', { willReadFrequently: true })!;
+        const size = Math.min(w, h) * 0.92;
+        g.drawImage(img, (w - size) / 2, (h - size) / 2, size, size);
+        const px = g.getImageData(0, 0, w, h).data;
+        const out: number[] = [];
+        for (let y = 0; y < h; y++) {
+            for (let x = 0; x < w; x++) {
+                const a = px[(y * w + x) * 4 + 3];
+                if (a > 150) out.push((x + 0.5) / w, (y + 0.5) / h, 1);
+                else if (a > 20 && BAYER4[(y % 4) * 4 + (x % 4)] < 0.4) out.push((x + 0.5) / w, (y + 0.5) / h, 0);
+            }
         }
+        // Shuffle whole triples, so bits leave one icon for the next as a swarm.
+        const n = out.length / 3;
+        for (let i = n - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            for (let k = 0; k < 3; k++) [out[i * 3 + k], out[j * 3 + k]] = [out[j * 3 + k], out[i * 3 + k]];
+        }
+        return new Float32Array(out);
+    } finally {
+        URL.revokeObjectURL(url);
     }
-    return shuffle(out);
 }
 
 /** A point on the quadratic curve from a to b that bows sideways by `bow` of its length. */

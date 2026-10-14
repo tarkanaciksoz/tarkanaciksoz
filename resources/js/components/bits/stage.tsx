@@ -1,14 +1,12 @@
-import { prefersReducedMotion, ScrollTrigger } from '@/lib/gsap';
-import { createContext, useContext, useEffect, useMemo, useRef, type ReactNode, type RefObject } from 'react';
+import { prefersReducedMotion } from '@/lib/gsap';
+import { createContext, useContext, useEffect, useRef, type ReactNode, type RefObject } from 'react';
 import type { BitField } from './field';
-import type { ChapterFrame } from './types';
+import type { ChapterFrame, Targets } from './types';
 
-type Api = {
-    register: (id: string, frame: ChapterFrame) => () => void;
-    activate: (id: string) => void;
-};
+type Chapter = { section: RefObject<HTMLElement | null>; frame: ChapterFrame };
+type Registry = Map<string, Chapter>;
 
-const Ctx = createContext<Api | null>(null);
+const Ctx = createContext<Registry | null>(null);
 
 /** How many bits the field draws, and how many bytes of the response each one stands for. */
 export function bitBudget(bytes: number) {
@@ -18,16 +16,31 @@ export function bitBudget(bytes: number) {
 }
 
 /**
+ * The chapter that owns the field this frame: the section crossing the middle of
+ * the screen. Decided every frame from where the sections really are, so a
+ * chapter can never be left in charge of a section that has scrolled away, in
+ * either direction. Between sections the bits fall back to the background drift.
+ */
+function director(chapters: Registry): ChapterFrame {
+    return (t: Targets, time: number) => {
+        const mid = t.vh / 2;
+        for (const chapter of chapters.values()) {
+            const r = chapter.section.current?.getBoundingClientRect();
+            if (r && r.top <= mid && r.bottom >= mid) return chapter.frame(t, time);
+        }
+        t.rest(0, t.n);
+    };
+}
+
+/**
  * One field of bits behind the whole page. Each section registers a chapter (a
- * function that says where every bit belongs) and takes the field over while it
- * is the section on screen. Three.js arrives in its own chunk once the page
- * knows how many bytes it is drawing.
+ * function that says where every bit belongs) and owns the field while it is the
+ * section in the middle of the screen. Three.js arrives in its own chunk once the
+ * page knows how many bytes it is drawing.
  */
 export function BitStage({ bytes, children }: { bytes: number | null; children: ReactNode }) {
     const canvas = useRef<HTMLCanvasElement>(null);
-    const field = useRef<BitField | null>(null);
-    const chapters = useRef(new Map<string, ChapterFrame>());
-    const active = useRef<string | null>(null);
+    const chapters = useRef<Registry>(new Map());
 
     useEffect(() => {
         const el = canvas.current;
@@ -43,8 +56,7 @@ export function BitStage({ bytes, children }: { bytes: number | null; children: 
             } catch {
                 return;
             }
-            field.current = instance;
-            instance.setChapter(active.current ? (chapters.current.get(active.current) ?? null) : null);
+            instance.setChapter(director(chapters.current));
             instance.start();
             window.addEventListener('resize', onResize);
         });
@@ -53,30 +65,11 @@ export function BitStage({ bytes, children }: { bytes: number | null; children: 
             alive = false;
             window.removeEventListener('resize', onResize);
             instance?.dispose();
-            field.current = null;
         };
     }, [bytes]);
 
-    const api = useMemo<Api>(
-        () => ({
-            register(id, frame) {
-                chapters.current.set(id, frame);
-                if (active.current === id) field.current?.setChapter(frame);
-                return () => {
-                    chapters.current.delete(id);
-                    if (active.current === id) field.current?.setChapter(null);
-                };
-            },
-            activate(id) {
-                active.current = id;
-                field.current?.setChapter(chapters.current.get(id) ?? null);
-            },
-        }),
-        [],
-    );
-
     return (
-        <Ctx.Provider value={api}>
+        <Ctx.Provider value={chapters.current}>
             <canvas ref={canvas} className="pointer-events-none fixed inset-0 z-[1] h-full w-full" aria-hidden="true" />
             {children}
         </Ctx.Provider>
@@ -84,34 +77,19 @@ export function BitStage({ bytes, children }: { bytes: number | null; children: 
 }
 
 /**
- * Hands the field to a section while that section is the one on screen. The frame
- * is read through a ref, so it can close over fresh state without re-registering.
+ * Registers a section's chapter. The frame is read through a ref, so it can close
+ * over fresh state without registering again.
  */
-export function useBitChapter(
-    id: string,
-    section: RefObject<HTMLElement | null>,
-    frame: ChapterFrame,
-    range = { start: 'top 55%', end: 'bottom 55%' },
-) {
-    const api = useContext(Ctx);
+export function useBitChapter(id: string, section: RefObject<HTMLElement | null>, frame: ChapterFrame) {
+    const chapters = useContext(Ctx);
     const latest = useRef(frame);
     latest.current = frame;
 
     useEffect(() => {
-        if (!api) return;
-        return api.register(id, (t, time) => latest.current(t, time));
-    }, [api, id]);
-
-    useEffect(() => {
-        const el = section.current;
-        if (!api || !el) return;
-        const trigger = ScrollTrigger.create({
-            trigger: el,
-            start: range.start,
-            end: range.end,
-            onToggle: (self) => self.isActive && api.activate(id),
-        });
-        if (trigger.isActive) api.activate(id);
-        return () => trigger.kill();
-    }, [api, id, section, range.start, range.end]);
+        if (!chapters) return;
+        chapters.set(id, { section, frame: (t, time) => latest.current(t, time) });
+        return () => {
+            chapters.delete(id);
+        };
+    }, [chapters, id, section]);
 }

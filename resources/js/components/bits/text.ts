@@ -19,6 +19,7 @@ export function useTextFormation(
     text: string | null,
     place: (vw: number, vh: number) => Box | null,
     redShare = 0.5,
+    alpha = 0.55,
 ) {
     const cache = useRef(new Map<string, Float32Array>());
     const ready = useRef(false);
@@ -38,10 +39,11 @@ export function useTextFormation(
         const box = place(t.vw, t.vh);
         if (!text || !box || !ready.current) return t.rest(0, t.n);
         const aspect = box.w / box.h;
-        let dots = cache.current.get(text);
+        const key = `${text}|${aspect.toFixed(2)}`;
+        let dots = cache.current.get(key);
         if (!dots) {
             dots = sampleText(text, FONT, COLS, aspect);
-            cache.current.set(text, dots);
+            cache.current.set(key, dots);
         }
         const cell = box.w / COLS;
         const m = Math.min(t.n, dots.length / 2);
@@ -50,7 +52,7 @@ export function useTextFormation(
             const [r, g, b] = red ? RED : WHITE;
             t.x[i] = box.x + dots[i * 2] * box.w;
             t.y[i] = box.y + dots[i * 2 + 1] * box.h;
-            t.a[i] = red ? 0.75 : 0.55;
+            t.a[i] = red ? Math.min(1, alpha + 0.2) : alpha;
             t.r[i] = r;
             t.g[i] = g;
             t.b[i] = b;

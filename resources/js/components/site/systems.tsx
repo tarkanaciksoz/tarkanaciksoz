@@ -1,18 +1,42 @@
-import { gsap, prefersReducedMotion, ScrollTrigger, useGSAP } from '@/lib/gsap';
+import { gsap, prefersReducedMotion, remeasure, ScrollTrigger, useGSAP } from '@/lib/gsap';
 import { useStage } from '@/lib/stage';
 import type { System } from '@/types/portfolio';
+import {
+    BellRinging,
+    ChartLineUp,
+    CreditCard,
+    Cube,
+    LockKey,
+    MagicWand,
+    ShieldCheck,
+    SlidersHorizontal,
+    Television,
+    type Icon,
+} from '@phosphor-icons/react';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { sampleImage } from '../bits/shapes';
+import { sampleIcon } from '../bits/shapes';
 import { useBitChapter } from '../bits/stage';
 import { CYAN, RED, WHITE, type Targets } from '../bits/types';
-import { DitherImage } from '../signal/dither-image';
 import { SectionHead } from './section-head';
 import { SectionState, type Loadable } from './section-state';
 
 /** Scroll per system while pinned, as a share of the viewport height. */
 const PER_SYSTEM = 0.7;
-/** Dot grid across the photograph's box. */
-const COLS = 168;
+/** Dot grid across the icon's box. */
+const COLS = 150;
+
+/** What each system is drawn as: one plain, recognisable mark. */
+const ICONS: Record<string, Icon> = {
+    payments: CreditCard,
+    push: BellRinging,
+    'ai-media': MagicWand,
+    analytics: ChartLineUp,
+    'control-plane': SlidersHorizontal,
+    skeleton: LockKey,
+    realtime: Television,
+    vpn: ShieldCheck,
+};
+const iconFor = (slug: string) => ICONS[slug] ?? Cube;
 
 function Copy({ system }: { system: System }) {
     return (
@@ -48,29 +72,30 @@ function Copy({ system }: { system: System }) {
 /**
  * What I have built. Pinned, the page's bits assemble each project's photograph,
  * hold it while its story is read, then scatter and assemble the next. On phones,
- * short screens and under reduced motion the projects stack, each with its
- * photograph dithered in place.
+ * short screens and under reduced motion the projects stack, each with its icon.
  */
 export function Systems({ state }: { state: Loadable<System[]> }) {
     const stage = useStage();
     const root = useRef<HTMLElement>(null);
     const pinned = useRef<HTMLDivElement>(null);
     const photo = useRef<HTMLDivElement>(null);
+    const marks = useRef<HTMLDivElement>(null);
     const bar = useRef<HTMLDivElement>(null);
     const dots = useRef<(Float32Array | null)[]>([]);
     const index = useRef(0);
     const systems = useMemo(() => state.data ?? [], [state.data]);
     const [at, setAt] = useState(0);
 
-    // Each photograph is read into dots once, when the section is near.
+    // Each system's icon is read into dots once, from the SVG the icon library renders below.
     useEffect(() => {
         const box = photo.current;
-        if (!stage || !box || !systems.length) return;
+        const svgs = marks.current?.querySelectorAll('svg');
+        if (!stage || !box || !svgs?.length) return;
         const aspect = box.clientWidth / Math.max(1, box.clientHeight);
         let alive = true;
-        systems.forEach((s, k) => {
-            if (!s.image || dots.current[k]) return;
-            sampleImage(s.image, COLS, aspect)
+        dots.current = [];
+        svgs.forEach((svg, k) => {
+            sampleIcon(svg.outerHTML, COLS, aspect)
                 .then((d) => alive && (dots.current[k] = d))
                 .catch(() => undefined);
         });
@@ -83,17 +108,16 @@ export function Systems({ state }: { state: Loadable<System[]> }) {
         const box = photo.current;
         if (!stage || !box) return t.rest(0, t.n);
         const r = box.getBoundingClientRect();
-        // The photograph on screen, or the nearest one already read.
-        let d = dots.current[index.current];
-        for (let k = index.current; !d && k >= 0; k--) d = dots.current[k];
+        const d = dots.current[index.current];
         if (!d) return t.rest(0, t.n);
         const cell = r.width / COLS;
-        const m = Math.min(t.n, d.length / 2);
+        const m = Math.min(t.n, d.length / 3);
         const tearing = time % 4.2 < 0.22;
         const tearY = r.top + ((time * 0.37) % 1) * r.height;
         for (let i = 0; i < m; i++) {
-            let x = r.left + d[i * 2] * r.width;
-            const y = r.top + d[i * 2 + 1] * r.height;
+            const line = d[i * 3 + 2] > 0.5;
+            let x = r.left + d[i * 3] * r.width;
+            const y = r.top + d[i * 3 + 1] * r.height;
             let [cr, cg, cb] = WHITE;
             if (tearing && Math.abs(y - tearY) < 9) {
                 x += t.seed[i] < 0.5 ? 10 : -10;
@@ -101,11 +125,12 @@ export function Systems({ state }: { state: Loadable<System[]> }) {
             }
             t.x[i] = x;
             t.y[i] = y;
-            t.a[i] = 0.92;
+            // The outline reads first; the fill sits behind it as a faint dither.
+            t.a[i] = line ? 0.95 : 0.3;
             t.r[i] = cr;
             t.g[i] = cg;
             t.b[i] = cb;
-            t.s[i] = cell * 0.9;
+            t.s[i] = cell * (line ? 0.95 : 0.8);
             t.sq[i] = 1;
         }
         t.rest(m, t.n);
@@ -140,6 +165,7 @@ export function Systems({ state }: { state: Loadable<System[]> }) {
                     }
                 },
             });
+            remeasure();
         },
         { scope: root, dependencies: [systems.length, stage], revertOnUpdate: true },
     );
@@ -176,7 +202,7 @@ export function Systems({ state }: { state: Loadable<System[]> }) {
                 }
             >
                 {stage && current ? (
-                    <div ref={pinned} className="flex h-[100dvh] flex-col justify-center pt-16 pb-6">
+                    <div ref={pinned} className="flex h-[100dvh] flex-col pt-24 pb-6">
                         <div className="flex items-center gap-6 font-mono text-[12px] text-zinc-400">
                             <div className="h-px flex-1 bg-white/10">
                                 <div ref={bar} className="h-px bg-[#ff3b30]" style={{ transform: 'scaleX(0)', transformOrigin: 'left center' }} />
@@ -188,9 +214,9 @@ export function Systems({ state }: { state: Loadable<System[]> }) {
                                 Skip to rules
                             </a>
                         </div>
-                        <div className="mt-8 grid min-h-0 grid-cols-[minmax(0,5fr)_minmax(0,6fr)] items-center gap-14">
-                            {/* The photograph is drawn by the page's bits; this box only says where. */}
-                            <div ref={photo} role="img" aria-label={current.title} className="h-[min(62vh,600px)] w-full" />
+                        <div className="mt-8 grid min-h-0 flex-1 grid-cols-[minmax(0,5fr)_minmax(0,6fr)] items-start gap-14">
+                            {/* The icon is drawn by the page's bits; this box only says where. */}
+                            <div ref={photo} role="img" aria-label={current.title} className="h-[min(56vh,520px)] w-full" />
                             <div className="sys-copy min-w-0">
                                 <Copy system={current} />
                             </div>
@@ -203,9 +229,10 @@ export function Systems({ state }: { state: Loadable<System[]> }) {
                                 key={system.slug}
                                 className="sys-panel grid gap-6 border-t border-white/10 py-10 lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)] lg:gap-12"
                             >
-                                {system.image && (
-                                    <DitherImage src={system.image} alt={system.title} className="aspect-[4/3] w-full bg-white/[0.015]" />
-                                )}
+                                {(() => {
+                                    const Mark = iconFor(system.slug);
+                                    return <Mark aria-hidden="true" weight="duotone" className="size-32 text-zinc-200 sm:size-40" />;
+                                })()}
                                 <div className="min-w-0">
                                     <Copy system={system} />
                                 </div>
@@ -214,6 +241,14 @@ export function Systems({ state }: { state: Loadable<System[]> }) {
                     </div>
                 )}
             </SectionState>
+
+            {/* The icons themselves, never shown: their SVG is what the bits are sampled from. */}
+            <div ref={marks} hidden aria-hidden="true">
+                {systems.map((system) => {
+                    const Mark = iconFor(system.slug);
+                    return <Mark key={system.slug} size={256} weight="duotone" color="#ffffff" />;
+                })}
+            </div>
         </section>
     );
 }

@@ -1,39 +1,41 @@
 import { apiGet, fetchTrace, ms, postClientTiming } from '@/lib/api';
-import { gsap, prefersReducedMotion, scrollToY, ScrollTrigger, useGSAP } from '@/lib/gsap';
+import { gsap, prefersReducedMotion, remeasure, scrollToY, ScrollTrigger, useGSAP } from '@/lib/gsap';
 import { useMagnetic } from '@/lib/magnetic';
 import { useStage } from '@/lib/stage';
 import type { StackResponse } from '@/types/portfolio';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useBitChapter } from '../bits/stage';
-import { RED, WHITE, type Targets } from '../bits/types';
+import { useTextFormation } from '../bits/text';
 import { Scramble } from '../motion/scramble';
 import { Evidence, type RunData } from './evidence';
 import { buildSteps } from './steps';
 import { buildTimeline, type Row } from './timeline';
 
 /** Scroll per step while pinned, as a share of the viewport height. */
-const PER_STEP = 0.34;
-/** Bits poured into the bars; each step gets its share of the request's time. */
-const POUR = 5200;
+const PER_STEP = 0.4;
 
 type Status = 'waiting' | 'sending' | 'ready' | 'error';
 
-function StepText({ row, index, total }: { row: Row; index: number; total: number }) {
+/** What a step is, in words: where it ran, what it was, why it is there. */
+function StepText({ row, index, total, number }: { row: Row; index: number; total: number; number: boolean }) {
     const { step } = row;
     return (
         <div className="min-w-0">
             <div className="font-mono text-[12px] text-zinc-400">
-                {index + 1} of {total}, {row.clock === 'browser' ? 'in the browser' : 'at the server'}
+                step {index + 1} of {total}, {row.clock === 'browser' ? 'in the browser' : 'at the server'}
                 {step.depth > 0 && ', nested'}
             </div>
-            <h3 className="mt-2 text-3xl leading-[1.05] font-semibold tracking-[-0.03em] text-zinc-50">{step.title}</h3>
-            <div className={`font-pixel mt-3 text-5xl leading-none ${step.slow ? 'text-[#ff3b30]' : 'text-zinc-100'}`}>
-                <Scramble key={step.key} text={`${ms(step.ms)} ms`} duration={0.5} />
-            </div>
+            <h3 className="mt-2 text-3xl leading-[1.05] font-semibold tracking-[-0.03em] text-zinc-50 sm:text-4xl">{step.title}</h3>
+            {number ? (
+                <div className={`font-pixel mt-3 text-5xl leading-none ${step.slow ? 'text-[#ff3b30]' : 'text-zinc-100'}`}>
+                    <Scramble key={step.key} text={`${ms(step.ms)} ms`} duration={0.5} />
+                </div>
+            ) : (
+                <span className="sr-only">{`${ms(step.ms)} milliseconds`}</span>
+            )}
             {step.slow && <div className="mt-2 font-mono text-[12px] text-[#ff3b30]">the slowest thing the server did</div>}
-            <p className="mt-4 max-w-[56ch] text-[15px] leading-relaxed text-zinc-300">{step.detail}</p>
+            <p className="mt-4 max-w-[56ch] text-[15.5px] leading-relaxed text-zinc-300">{step.detail}</p>
             {step.why && (
-                <p className="mt-3 max-w-[56ch] border-l-2 border-[#ff3b30]/60 pl-4 text-[14.5px] leading-relaxed text-zinc-400">
+                <p className="mt-4 max-w-[56ch] border-l-2 border-[#ff3b30]/60 pl-4 text-[15px] leading-relaxed text-zinc-400">
                     <span className="mr-2 font-mono text-[12px] text-[#ff3b30]">why</span>
                     {step.why}
                 </p>
@@ -43,19 +45,62 @@ function StepText({ row, index, total }: { row: Row; index: number; total: numbe
 }
 
 /**
+ * The whole request as one rail: a segment per step in the order it ran, each
+ * as wide as its time (with a floor, so a 0.1 ms step is still a target). The
+ * current one is lit; clicking any segment goes there.
+ */
+function Rail({ rows, active, onPick }: { rows: Row[]; active: number; onPick: (k: number) => void }) {
+    return (
+        <div>
+            <div className="flex h-10 items-stretch gap-[3px]" role="list" aria-label="Steps of the request, by duration">
+                {rows.map((r, k) => {
+                    const state = k === active ? 'now' : k < active ? 'past' : 'next';
+                    return (
+                        <button
+                            key={r.step.key}
+                            type="button"
+                            role="listitem"
+                            onClick={() => onPick(k)}
+                            aria-current={state === 'now' ? 'step' : undefined}
+                            aria-label={`${r.step.title}, ${ms(r.step.ms)} milliseconds`}
+                            title={`${r.step.title}: ${ms(r.step.ms)} ms`}
+                            style={{ flexGrow: Math.max(r.step.ms, 0.0001), flexBasis: 10 }}
+                            className="group relative min-w-[10px]"
+                        >
+                            <span
+                                className={`absolute inset-x-0 bottom-0 transition-all duration-300 ${
+                                    state === 'now'
+                                        ? `h-full ${r.step.slow ? 'bg-[#ff3b30]' : 'bg-zinc-50'}`
+                                        : state === 'past'
+                                          ? `h-3 ${r.step.slow ? 'bg-[#ff3b30]/70' : 'bg-zinc-400'} group-hover:h-5`
+                                          : 'h-3 bg-white/15 group-hover:h-5 group-hover:bg-white/30'
+                                }`}
+                            />
+                        </button>
+                    );
+                })}
+            </div>
+            <div className="mt-2 flex justify-between font-mono text-[11.5px] text-zinc-400">
+                <span>fetch()</span>
+                <span>each segment is one step, as wide as it took</span>
+                <span>last byte</span>
+            </div>
+        </div>
+    );
+}
+
+/**
  * How this page was made: the page sends the request behind the map, reads the
- * trace it left, and shows where its time went. Bits wait beside the request
- * line; as the page scrolls they pour into each step in turn, as many as that
- * step's share of the time, and the step's proof opens beside it.
+ * trace it left, and walks it step by step as the page scrolls. The rail shows
+ * where the time went; the bits write the current step's time; the code, SQL,
+ * timings or bytes that step rests on sit under it.
  */
 export function Machine() {
     const stage = useStage();
     const root = useRef<HTMLDivElement>(null);
     const pinned = useRef<HTMLDivElement>(null);
-    const source = useRef<HTMLDivElement>(null);
-    const tracks = useRef<(HTMLSpanElement | null)[]>([]);
+    const number = useRef<HTMLDivElement>(null);
     const trigger = useRef<ScrollTrigger | null>(null);
-    const head = useRef(0);
     const activeRef = useRef(0);
     const busy = useRef(false);
     const sendButton = useMagnetic<HTMLButtonElement>(0.25);
@@ -68,51 +113,18 @@ export function Machine() {
     const rows = useMemo(() => (data ? buildTimeline(buildSteps(data.trace, data.client), data.trace, data.client).rows : []), [data]);
     const row = rows[active] ?? rows[0];
 
-    // How many bits each step gets, and how long its bar is: both in proportion to its time.
-    const shares = useMemo(() => {
-        const total = rows.reduce((n, r) => n + r.step.ms, 0) || 1;
-        const max = Math.max(...rows.map((r) => r.step.ms), 0.001);
-        return rows.map((r) => ({ count: Math.max(16, Math.round((POUR * r.step.ms) / total)), length: r.step.ms / max }));
-    }, [rows]);
-
-    useBitChapter('made', root, (t: Targets, time: number) => {
-        const src = source.current;
-        if (!stage || !src || !rows.length) return t.rest(0, t.n);
-        const s = src.getBoundingClientRect();
-        const f = head.current;
-        const now = Math.round(f);
-        let i = 0;
-        rows.forEach((r, k) => {
-            const bar = tracks.current[k]?.getBoundingClientRect();
-            const share = shares[k];
-            const length = bar ? Math.max(3, share.length * bar.width) : 0;
-            const poured = f >= k - 0.5;
-            const isNow = k === now;
-            for (let q = 0; q < share.count && i < t.n; q++, i++) {
-                if (poured && bar) {
-                    t.x[i] = bar.left + t.seed[i] * length;
-                    t.y[i] = bar.top + bar.height / 2 + (t.seed2[i] - 0.5) * 10;
-                    const [cr, cg, cb] = r.step.slow && k <= now ? RED : WHITE;
-                    t.r[i] = cr;
-                    t.g[i] = cg;
-                    t.b[i] = cb;
-                    t.a[i] = isNow ? 1 : 0.5;
-                    t.s[i] = isNow ? 3 : 2.4;
-                } else {
-                    // Still waiting: a loose cloud beside the request line.
-                    t.x[i] = s.left + s.width * (0.35 + 0.6 * t.seed[i]);
-                    t.y[i] = s.top + s.height / 2 + (t.seed2[i] - 0.5) * 18 + Math.sin(time * 2 + t.seed[i] * 20) * 2;
-                    t.r[i] = WHITE[0];
-                    t.g[i] = WHITE[1];
-                    t.b[i] = WHITE[2];
-                    t.a[i] = 0.22;
-                    t.s[i] = 2;
-                }
-                t.sq[i] = 1;
-            }
-        });
-        t.rest(i, t.n);
-    });
+    // The bits write the current step's time, large, and re-form into the next one as the page scrolls.
+    useTextFormation(
+        'made',
+        root,
+        stage && row ? `${ms(row.step.ms)}ms` : null,
+        () => {
+            const r = number.current?.getBoundingClientRect();
+            return r && r.width > 0 ? { x: r.left, y: r.top, w: r.width, h: r.height } : null;
+        },
+        row?.step.slow ? 1 : 0.06,
+        0.9,
+    );
 
     const send = useCallback(async () => {
         if (busy.current) return;
@@ -125,7 +137,6 @@ export function Machine() {
             const trace = await fetchTrace(result.traceId);
             if (!trace) throw new Error('trace not found');
             activeRef.current = 0;
-            head.current = 0;
             setActive(0);
             setData({ trace, client: result.timing, raw: result.raw, cache: result.cache });
             setRuns((n) => n + 1);
@@ -175,15 +186,14 @@ export function Machine() {
                 anticipatePin: 1,
                 invalidateOnRefresh: true,
                 onUpdate: (self) => {
-                    head.current = self.progress * (n - 1);
-                    const i = Math.round(head.current);
+                    const i = Math.round(self.progress * (n - 1));
                     if (i !== activeRef.current) {
                         activeRef.current = i;
                         setActive(i);
                     }
                 },
             });
-            ScrollTrigger.refresh();
+            remeasure();
             return () => {
                 trigger.current = null;
             };
@@ -191,11 +201,11 @@ export function Machine() {
         { scope: root, dependencies: [runs, stage], revertOnUpdate: true },
     );
 
-    // A new step's words and proof arrive; the bars are what moved.
+    // A new step's words and proof slide in; the frame around them never moves.
     useGSAP(
         () => {
             if (!stage || !data || prefersReducedMotion()) return;
-            gsap.fromTo('.mx-detail', { autoAlpha: 0, y: 10 }, { autoAlpha: 1, y: 0, duration: 0.35, ease: 'power2.out', overwrite: 'auto' });
+            gsap.fromTo('.mx-detail', { autoAlpha: 0, x: 16 }, { autoAlpha: 1, x: 0, duration: 0.35, ease: 'power2.out', overwrite: 'auto' });
         },
         { scope: root, dependencies: [active, runs, stage, data] },
     );
@@ -218,7 +228,7 @@ export function Machine() {
     const t = data?.trace;
     const requestLine = (
         <div className="flex flex-wrap items-center justify-between gap-x-8 gap-y-3 border-b border-white/10 pb-4">
-            <div ref={source} className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-5 gap-y-1 font-mono text-[12.5px] text-zinc-400">
+            <div className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-5 gap-y-1 font-mono text-[12.5px] text-zinc-400">
                 <span className="text-zinc-100">GET /api/stack</span>
                 {status === 'ready' && t ? (
                     <>
@@ -257,10 +267,10 @@ export function Machine() {
     );
 
     const skeleton = (
-        <div className="mt-6 space-y-3" aria-hidden="true">
-            {[38, 22, 64, 30, 80, 46, 58].map((w, i) => (
-                <div key={i} className="h-3 animate-pulse bg-white/[0.04]" style={{ width: `${w}%` }} />
-            ))}
+        <div className="mt-8 space-y-4" aria-hidden="true">
+            <div className="h-10 animate-pulse bg-white/[0.04]" />
+            <div className="h-6 w-1/3 animate-pulse bg-white/[0.04]" />
+            <div className="h-4 w-1/2 animate-pulse bg-white/[0.03]" />
         </div>
     );
 
@@ -273,7 +283,7 @@ export function Machine() {
                         <ol className="mt-6">
                             {rows.map((r, k) => (
                                 <li key={r.step.key} className={`mx-step grid gap-6 py-10 transition-opacity ${k === active ? '' : 'opacity-60'}`}>
-                                    <StepText row={r} index={k} total={rows.length} />
+                                    <StepText row={r} index={k} total={rows.length} number />
                                     <div className="min-w-0">
                                         <Evidence step={r.step} data={data} />
                                     </div>
@@ -288,62 +298,29 @@ export function Machine() {
         );
     }
 
+    // Pinned: every block has a fixed place and height, so changing steps never moves the frame.
     return (
         <div ref={root}>
-            <div ref={pinned} className="flex h-[100dvh] flex-col justify-center pt-16 pb-6">
+            <div ref={pinned} className="flex h-[100dvh] flex-col pt-20 pb-6">
                 {requestLine}
                 {data && row ? (
-                    <div className="mt-6 grid min-h-0 grid-cols-[minmax(0,6fr)_minmax(0,5fr)] gap-12">
-                        <div className="min-w-0">
-                            <div className="mb-3 font-mono text-[12px] text-zinc-400">
-                                where the time went: one bar of bits per step, in the order it happened
-                            </div>
-                            <ol>
-                                {rows.map((r, k) => {
-                                    const state = k === active ? 'now' : k < active ? 'past' : 'next';
-                                    return (
-                                        <li key={r.step.key}>
-                                            <button
-                                                type="button"
-                                                onClick={() => pick(k)}
-                                                aria-current={state === 'now' ? 'step' : undefined}
-                                                className="group grid h-[26px] w-full grid-cols-[minmax(0,190px)_minmax(0,1fr)_56px] items-center gap-4 text-left font-mono text-[12px]"
-                                            >
-                                                <span
-                                                    className={`truncate transition-colors group-hover:text-zinc-100 ${
-                                                        state === 'now' ? 'text-zinc-50' : state === 'past' ? 'text-zinc-300' : 'text-zinc-400'
-                                                    }`}
-                                                    style={{ paddingLeft: `${Math.min(r.step.depth, 4) * 10}px` }}
-                                                >
-                                                    {r.step.title}
-                                                </span>
-                                                {/* The bar is drawn by the bits; this only marks where. */}
-                                                <span
-                                                    ref={(el) => {
-                                                        tracks.current[k] = el;
-                                                    }}
-                                                    className="relative block h-full border-b border-white/[0.06]"
-                                                />
-                                                <span
-                                                    className={`text-right tabular-nums ${
-                                                        r.step.slow ? 'text-[#ff3b30]' : state === 'now' ? 'text-zinc-50' : 'text-zinc-400'
-                                                    }`}
-                                                >
-                                                    {ms(r.step.ms)}
-                                                </span>
-                                            </button>
-                                        </li>
-                                    );
-                                })}
-                            </ol>
+                    <>
+                        <div className="mt-6">
+                            <Rail rows={rows} active={active} onPick={pick} />
                         </div>
-                        <div className="mx-detail flex min-h-0 flex-col gap-5">
-                            <StepText row={row} index={active} total={rows.length} />
-                            <div className="min-h-0 [&>*]:max-h-[36vh]">
-                                <Evidence step={row.step} data={data} />
+                        <div className="mt-8 grid min-h-0 flex-1 grid-cols-[minmax(0,5fr)_minmax(0,7fr)] gap-14">
+                            <div className="mx-detail min-h-0 overflow-hidden">
+                                <StepText row={row} index={active} total={rows.length} number={false} />
+                            </div>
+                            <div className="grid min-h-0 grid-rows-[minmax(90px,20vh)_minmax(0,1fr)] gap-5">
+                                {/* The step's time, written by the page's bits; this box only says where. */}
+                                <div ref={number} aria-hidden="true" />
+                                <div className="mx-detail min-h-0">
+                                    <Evidence step={row.step} data={data} />
+                                </div>
                             </div>
                         </div>
-                    </div>
+                    </>
                 ) : (
                     skeleton
                 )}

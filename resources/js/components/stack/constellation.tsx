@@ -1,4 +1,4 @@
-import { prefersReducedMotion, scrollToY, ScrollTrigger, useGSAP } from '@/lib/gsap';
+import { prefersReducedMotion, remeasure, scrollToY, ScrollTrigger, useGSAP } from '@/lib/gsap';
 import { useStage } from '@/lib/stage';
 import type { Flow, StackItem, StackLayer } from '@/types/portfolio';
 import { X } from '@phosphor-icons/react';
@@ -169,6 +169,7 @@ export function Constellation({ layers, flows }: { layers: StackLayer[]; flows: 
                     setHop((prev) => (prev === h ? prev : h));
                 },
             });
+            remeasure();
             return () => {
                 trigger.current = null;
             };
