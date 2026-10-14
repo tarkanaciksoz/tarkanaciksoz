@@ -1,14 +1,14 @@
-import { ms } from '@/lib/api';
-import { gsap, prefersReducedMotion, useGSAP } from '@/lib/gsap';
+import { gsap, prefersReducedMotion, ScrollTrigger, useGSAP } from '@/lib/gsap';
 import { introDone } from '@/lib/intro';
 import { useMagnetic } from '@/lib/magnetic';
 import type { Profile } from '@/types/portfolio';
 import { ArrowDown, ArrowUpRight } from '@phosphor-icons/react';
 import { useRef } from 'react';
+import { smoothstep } from '../bits/shapes';
+import { bitBudget, useBitChapter } from '../bits/stage';
+import { CYAN, RED, WHITE, type Targets } from '../bits/types';
 import { SplitReveal } from '../motion/split-reveal';
 import { Terminal } from '../terminal/terminal';
-import { GlassCanvas } from './glass-canvas';
-import type { SceneLayer } from './glass-scene';
 
 /** The owner's name as a shell user: first name, lower case, plain ASCII. */
 const shellUser = (name: string) =>
@@ -18,16 +18,90 @@ const shellUser = (name: string) =>
         .replace(/[^a-zA-Z]/g, '')
         .toLowerCase() || 'owner';
 
-export type HeroRequest = { status: number; serverMs: number; cache: string | null } | 'failed';
+/** At most this many bits form the sphere; the rest drift in the background. */
+const SPHERE = 6500;
 
 /**
- * First screen: who, what, two ways in, and the request that drew the page,
- * standing in a glass box. The terminal answers in the voice of the site.
+ * The hero's formation: a sphere of 0/1 glyphs turning slowly, brighter on the
+ * near side, torn by a short red/cyan band every few seconds. Scrolling the hero
+ * away pours it downward into the next section.
  */
-export function Hero({ profile, layers, request }: { profile: Profile | null; layers: SceneLayer[] | null; request: HeroRequest | null }) {
+function sphere(anchor: HTMLElement | null, progress: number, t: Targets, time: number) {
+    if (!anchor) return t.rest(0, t.n);
+    const box = anchor.getBoundingClientRect();
+    const m = Math.min(t.n, SPHERE);
+    const cx = box.left + box.width / 2;
+    const cy = box.top + box.height / 2;
+    const R = Math.min(box.width, box.height) * 0.4;
+    const spin = time * 0.12 + (t.pointer.x > 0 ? (t.pointer.x / t.vw - 0.5) * 0.8 : 0);
+    const tilt = 0.38;
+    const ct = Math.cos(tilt);
+    const st = Math.sin(tilt);
+    const pour = smoothstep(0.02, 0.8, progress);
+    const tearing = time % 3.6 < 0.28;
+    const tearY = cy + Math.sin(time * 1.9) * R * 0.6;
+
+    for (let i = 0; i < m; i++) {
+        const theta = t.seed[i] * Math.PI * 2 + spin;
+        const phi = Math.acos(2 * t.seed2[i] - 1);
+        const rad = R * (0.9 + 0.1 * ((t.seed[i] * 7.31) % 1));
+        const x3 = rad * Math.sin(phi) * Math.cos(theta);
+        const z0 = rad * Math.sin(phi) * Math.sin(theta);
+        const y0 = rad * Math.cos(phi);
+        const y3 = y0 * ct - z0 * st;
+        const z3 = y0 * st + z0 * ct;
+        const persp = 700 / (700 - z3);
+        let sx = cx + x3 * persp;
+        const sy = cy + y3 * persp;
+        const depth = (z3 + R) / (2 * R);
+
+        // Pouring: each bit leaves at its own moment for a falling, swaying column of binary below.
+        const leave = smoothstep(0, 1, (pour - t.seed2[i] * 0.4) / 0.6);
+        const fall = t.seed2[i] * t.vh * 2.4;
+        const streamX = cx + Math.sin(fall * 0.006 + time * 0.8) * 40 + (t.seed[i] - 0.5) * 120;
+        const streamY = box.bottom - R * 0.4 + fall;
+
+        let [r, g, b] = WHITE;
+        if (tearing && Math.abs(sy - tearY) < 12) {
+            sx += t.seed[i] < 0.5 ? 16 : -16;
+            [r, g, b] = t.seed[i] < 0.5 ? RED : CYAN;
+        } else if ((t.seed[i] * 13.7) % 1 < 0.03) [r, g, b] = RED;
+
+        t.x[i] = sx + (streamX - sx) * leave;
+        t.y[i] = sy + (streamY - sy) * leave;
+        t.a[i] = (0.14 + 0.78 * depth) * (1 - 0.55 * leave);
+        t.r[i] = r;
+        t.g[i] = g;
+        t.b[i] = b;
+        t.s[i] = (7 + 4 * depth) * (1 - 0.25 * leave);
+        t.sq[i] = 0;
+    }
+    t.rest(m, t.n);
+}
+
+/**
+ * First screen: who, what, two ways in, and the bits of the request that drew
+ * the page, gathered into a turning sphere. The terminal answers in the voice of the site.
+ */
+export function Hero({ profile, bytes }: { profile: Profile | null; bytes: number | null }) {
     const root = useRef<HTMLElement>(null);
+    const anchor = useRef<HTMLDivElement>(null);
+    const progress = useRef(0);
     const primary = useMagnetic<HTMLAnchorElement>(0.3);
     const secondary = useMagnetic<HTMLAnchorElement>(0.3);
+
+    // Active from the first frame: the hero is on screen at load.
+    useBitChapter('hero', root, (t, time) => sphere(anchor.current, progress.current, t, time), { start: 'top bottom', end: 'bottom 55%' });
+
+    useGSAP(() => {
+        const st = ScrollTrigger.create({
+            trigger: root.current,
+            start: 'top top',
+            end: 'bottom top',
+            onUpdate: (self) => (progress.current = self.progress),
+        });
+        return () => st.kill();
+    });
 
     useGSAP(
         () => {
@@ -38,7 +112,6 @@ export function Hero({ profile, layers, request }: { profile: Profile | null; la
                 .from('[data-hero="sub"]', { y: 18, autoAlpha: 0, duration: 0.9 }, 0.5)
                 .from('[data-hero="cta"] > *', { y: 14, autoAlpha: 0, duration: 0.7, stagger: 0.08 }, 0.65)
                 .from('[data-hero="term"]', { y: 24, autoAlpha: 0, duration: 1 }, 0.8)
-                .from('[data-hero="figure"]', { autoAlpha: 0, scale: 0.94, duration: 1.4, ease: 'expo.out' }, 0.2)
                 .from('[data-hero="caption"]', { autoAlpha: 0, duration: 1 }, 1.1);
             introDone.then(() => entrance.play());
 
@@ -108,19 +181,18 @@ export function Hero({ profile, layers, request }: { profile: Profile | null; la
                 </div>
             </div>
 
-            {/* The box bleeds to the right edge of the window; the copy keeps the grid. */}
-            <figure data-hero="figure" data-speed="0.85" className="relative min-w-0 lg:-mr-12">
-                <GlassCanvas layers={layers} className="h-[48vh] min-h-[320px] w-full lg:h-[min(72vh,700px)]" />
-                <figcaption data-hero="caption" className="mt-2 font-mono text-[12px] text-zinc-400">
-                    {request === 'failed' ? (
-                        'The trace for this page could not be read.'
-                    ) : request ? (
+            {/* The sphere is drawn by the page-wide bit field; this box only says where. */}
+            <figure className="relative min-w-0">
+                <div ref={anchor} className="h-[46vh] min-h-[300px] w-full lg:h-[min(70vh,680px)]" aria-hidden="true" />
+                <figcaption data-hero="caption" className="mt-2 max-w-[52ch] font-mono text-[12px] text-zinc-400 lg:ml-auto lg:text-right">
+                    {bytes ? (
                         <>
-                            The request that drew this page: <span className="text-zinc-200">GET /api/stack</span>,{' '}
-                            <span className="text-zinc-200">{ms(request.serverMs)} ms</span> at the server, cache {request.cache ?? 'n/a'}.
+                            Every dot on this page is {bitBudget(bytes).perDot === 1 ? 'one byte' : `${bitBudget(bytes).perDot} bytes`} of{' '}
+                            <span className="text-zinc-200">GET /api/stack</span>, the response that drew it:{' '}
+                            <span className="text-zinc-200">{bytes.toLocaleString()} bytes</span>.
                         </>
                     ) : (
-                        'Reading the trace of the request that drew this page.'
+                        'Reading the response that draws this page.'
                     )}
                 </figcaption>
             </figure>

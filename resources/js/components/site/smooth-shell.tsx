@@ -19,7 +19,8 @@ export function SmoothShell({ children }: { children: ReactNode }) {
     }, []);
 
     return (
-        <div id="smooth-wrapper">
+        // Above the bit field (z-1), below the nav: the content reads over the bits.
+        <div id="smooth-wrapper" className="relative z-[2]">
             <div id="smooth-content">{ready ? children : null}</div>
         </div>
     );

@@ -209,9 +209,9 @@
 }
 
 /*
-  Stacking, page-wide: 0 the ambient canvas, 10 main content, 20 sticky bars inside
-  a section, 40 the fixed nav, 45 the scroll progress line, 50 the boot screen and
-  the jump glitch. Nothing else sets a z-index.
+  Stacking, page-wide: 0 the ambient canvas, 1 the bit field, 2 the smooth-scroll
+  wrapper (all content), 10 main inside it, 40 the fixed nav, 45 the scroll progress
+  line, 50 the boot screen and the jump glitch. Nothing else sets a z-index.
 */
 
 /* ---------------------------------------------------------------------------
@@ -446,47 +446,5 @@
     .jitter:focus-visible,
     .tear-line::after {
         animation: none;
-    }
-}
-
-/* Circuit board: a chip glitches as the signal lands on it. */
-@keyframes chip-land {
-    0% {
-        transform: translate(-3px, 0);
-    }
-    30% {
-        transform: translate(3px, 0);
-    }
-    60% {
-        transform: translate(-1px, 0);
-    }
-    100% {
-        transform: translate(0, 0);
-    }
-}
-.chip-land {
-    animation: chip-land 0.42s steps(3) 1;
-}
-@keyframes ghost-out {
-    0% {
-        opacity: 0.9;
-    }
-    100% {
-        opacity: 0;
-    }
-}
-.la-ghost {
-    animation: ghost-out 0.5s steps(3) both;
-}
-.cb-packet[data-hot='true'] rect {
-    fill: #ff3b30;
-}
-@media (prefers-reduced-motion: reduce) {
-    .chip-land,
-    .la-ghost {
-        animation: none;
-    }
-    .la-ghost {
-        opacity: 0;
     }
 }

@@ -1,21 +1,19 @@
-import { CircuitBoard } from '@/components/circuit/circuit-board';
-import type { SceneLayer } from '@/components/hero/glass-scene';
-import { Hero, type HeroRequest } from '@/components/hero/hero';
-import { heroLayers } from '@/components/hero/layers';
+import { BitStage } from '@/components/bits/stage';
+import { Hero } from '@/components/hero/hero';
 import { Machine } from '@/components/machine/machine';
 import { Ambient } from '@/components/signal/ambient';
 import { TearDivider } from '@/components/signal/tear-divider';
 import { JumpGlitch, ScrollProgress } from '@/components/site/chrome';
 import { Contact } from '@/components/site/contact';
 import { Intro } from '@/components/site/intro';
-import { LiveMarquee } from '@/components/site/live-marquee';
 import { Nav } from '@/components/site/nav';
 import { Rules } from '@/components/site/rules';
 import { SectionHead } from '@/components/site/section-head';
 import { SectionState, type Loadable } from '@/components/site/section-state';
 import { SmoothShell } from '@/components/site/smooth-shell';
 import { Systems } from '@/components/site/systems';
-import { apiGet, fetchTrace } from '@/lib/api';
+import { Constellation } from '@/components/stack/constellation';
+import { apiGet } from '@/lib/api';
 import { ScrollTrigger } from '@/lib/gsap';
 import { enableSmoothAnchors } from '@/lib/smooth-scroll';
 import type { Decision, Flow, Profile, StackResponse, System } from '@/types/portfolio';
@@ -70,28 +68,22 @@ export default function Home() {
     const flows = useApi<Flow[]>('/api/flows');
     const [stackAttempt, setStackAttempt] = useState(0);
     const [stack, setStack] = useState<Loadable<StackResponse>>({ data: null, loading: true, error: false, reload: () => undefined });
-    const [layers, setLayers] = useState<SceneLayer[] | null>(null);
-    const [request, setRequest] = useState<HeroRequest | null>(null);
+    const [bytes, setBytes] = useState<number | null>(null);
 
-    // The map's own request, and then the trace it left: the hero draws that trace.
+    // The map's own request. Its size decides how many bits the page is drawn with.
     useEffect(() => {
         let alive = true;
         const reload = () => setStackAttempt((n) => n + 1);
         setStack({ data: null, loading: true, error: false, reload });
         apiGet<StackResponse>('/api/stack')
-            .then(async (result) => {
+            .then((result) => {
                 if (!alive) return;
                 setStack({ data: result.body, loading: false, error: false, reload });
-                const trace = result.traceId ? await fetchTrace(result.traceId) : null;
-                if (!alive) return;
-                if (!trace) return setRequest('failed');
-                setLayers(heroLayers(trace, result.timing, result.cache));
-                setRequest({ status: trace.status, serverMs: trace.duration_ms, cache: result.cache });
+                setBytes(new TextEncoder().encode(result.raw).length);
             })
             .catch(() => {
                 if (!alive) return;
                 setStack({ data: null, loading: false, error: true, reload });
-                setRequest('failed');
             });
         return () => {
             alive = false;
@@ -130,84 +122,84 @@ export default function Home() {
                 <JumpGlitch />
                 <Intro />
 
-                <SmoothShell>
-                    <main
-                        id="content"
-                        tabIndex={-1}
-                        className="relative z-10 mx-auto w-full max-w-[1600px] px-4 pt-14 pb-16 outline-none sm:px-8 lg:px-12"
-                    >
-                        <Hero profile={p} layers={layers} request={request} />
+                <BitStage bytes={bytes}>
+                    <SmoothShell>
+                        <main
+                            id="content"
+                            tabIndex={-1}
+                            className="relative z-10 mx-auto w-full max-w-[1600px] px-4 pt-14 pb-16 outline-none sm:px-8 lg:px-12"
+                        >
+                            <Hero profile={p} bytes={bytes} />
 
-                        <div className="mt-6 sm:mt-10">
-                            <LiveMarquee />
-                        </div>
-                        <section id="stack" className="relative scroll-mt-16 pt-10">
-                            <SectionHead title="The tools, and what happens between them">
-                                Every chip is a tool I run. Pick a scenario and a signal walks the chips it really touches, in order, with the reason
-                                for each hop.
-                            </SectionHead>
-                            <div className="mt-10">
-                                <SectionState
-                                    state={board}
-                                    endpoint="/api/stack"
-                                    skeleton={
-                                        <>
-                                            <div className="flex gap-2">
-                                                {[150, 180, 160, 210].map((w) => (
-                                                    <div key={w} className="h-10 animate-pulse bg-white/[0.04]" style={{ width: w }} />
-                                                ))}
-                                            </div>
-                                            <div className="mt-6 aspect-[1200/650] animate-pulse border border-white/8 bg-white/[0.02]" />
-                                        </>
-                                    }
-                                >
-                                    {board.data && (
-                                        <>
-                                            <CircuitBoard layers={board.data.stack.data} flows={board.data.flows} />
-                                            <p className="mt-8 font-mono text-[12.5px] text-zinc-400">
-                                                This board is not markup. It is{' '}
-                                                <a
-                                                    href="/docs/api"
-                                                    className="text-zinc-100 underline decoration-white/25 underline-offset-4 hover:decoration-white"
-                                                >
-                                                    GET /api/stack
-                                                </a>{' '}
-                                                and{' '}
-                                                <a
-                                                    href="/docs/api"
-                                                    className="text-zinc-100 underline decoration-white/25 underline-offset-4 hover:decoration-white"
-                                                >
-                                                    GET /api/flows
-                                                </a>
-                                                : {board.data.stack.meta.items} tools, {board.data.flows.length} scenarios.
-                                            </p>
-                                        </>
-                                    )}
-                                </SectionState>
-                            </div>
-                        </section>
+                            <TearDivider />
+                            <section id="stack" className="relative scroll-mt-16 pt-10">
+                                <SectionHead title="The tools, and what happens between them">
+                                    Every point is a tool I run, every row a layer. Pick a scenario and scroll: the request flows through the tools it
+                                    really touches, in order, with the reason for each hop.
+                                </SectionHead>
+                                <div className="mt-10">
+                                    <SectionState
+                                        state={board}
+                                        endpoint="/api/stack"
+                                        skeleton={
+                                            <>
+                                                <div className="flex gap-2">
+                                                    {[150, 180, 160, 210].map((w) => (
+                                                        <div key={w} className="h-10 animate-pulse bg-white/[0.04]" style={{ width: w }} />
+                                                    ))}
+                                                </div>
+                                                <div className="mt-6 aspect-[1200/650] animate-pulse border border-white/8 bg-white/[0.02]" />
+                                            </>
+                                        }
+                                    >
+                                        {board.data && (
+                                            <>
+                                                <Constellation layers={board.data.stack.data} flows={board.data.flows} />
+                                                <p className="mt-8 font-mono text-[12.5px] text-zinc-400">
+                                                    This map is not markup. It is{' '}
+                                                    <a
+                                                        href="/docs/api"
+                                                        className="text-zinc-100 underline decoration-white/25 underline-offset-4 hover:decoration-white"
+                                                    >
+                                                        GET /api/stack
+                                                    </a>{' '}
+                                                    and{' '}
+                                                    <a
+                                                        href="/docs/api"
+                                                        className="text-zinc-100 underline decoration-white/25 underline-offset-4 hover:decoration-white"
+                                                    >
+                                                        GET /api/flows
+                                                    </a>
+                                                    : {board.data.stack.meta.items} tools, {board.data.flows.length} scenarios.
+                                                </p>
+                                            </>
+                                        )}
+                                    </SectionState>
+                                </div>
+                            </section>
 
-                        <TearDivider />
-                        <section id="made" className="relative scroll-mt-16 pt-10">
-                            <SectionHead title="How this page was made">
-                                One real request to this site, from fetch() to the last byte, sent as you arrived here. Every bar was measured; under
-                                each step is the code, SQL or bytes it rests on.
-                            </SectionHead>
-                            <div className="mt-10">
-                                <Machine />
-                            </div>
-                        </section>
+                            <TearDivider />
+                            <section id="made" className="relative scroll-mt-16 pt-10">
+                                <SectionHead title="How this page was made">
+                                    One real request to this site, sent as you arrived here. Scroll, and its time pours into each step it took, as
+                                    much as that step really cost; beside each step is the code, SQL or bytes it rests on.
+                                </SectionHead>
+                                <div className="mt-10">
+                                    <Machine />
+                                </div>
+                            </section>
 
-                        <TearDivider />
-                        <Systems state={systems} />
+                            <TearDivider />
+                            <Systems state={systems} />
 
-                        <TearDivider />
-                        <Rules state={decisions} />
+                            <TearDivider />
+                            <Rules state={decisions} />
 
-                        <TearDivider />
-                        <Contact profile={p} />
-                    </main>
-                </SmoothShell>
+                            <TearDivider />
+                            <Contact profile={p} />
+                        </main>
+                    </SmoothShell>
+                </BitStage>
             </div>
         </>
     );

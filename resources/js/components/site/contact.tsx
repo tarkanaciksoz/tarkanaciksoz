@@ -3,6 +3,7 @@ import { useMagnetic } from '@/lib/magnetic';
 import type { Profile } from '@/types/portfolio';
 import { ArrowUpRight } from '@phosphor-icons/react';
 import { useRef } from 'react';
+import { useTextFormation } from '../bits/text';
 import { SplitReveal } from '../motion/split-reveal';
 
 const external = (href: string) => (href.startsWith('http') ? { target: '_blank', rel: 'noreferrer' } : {});
@@ -19,6 +20,9 @@ export function Contact({ profile }: { profile: Profile | null }) {
     const address = primary?.href.replace(/^mailto:/, '') ?? '';
 
     const arrow = useMagnetic<HTMLSpanElement>(0.5);
+
+    // The page ends where every request does: the bits spell its status.
+    useTextFormation('contact', root, '200', (vw, vh) => (vw < 1024 ? null : { x: vw * 0.58, y: vh * 0.18, w: vw * 0.36, h: vh * 0.34 }), 0.25);
 
     const { contextSafe } = useGSAP(
         () => {
