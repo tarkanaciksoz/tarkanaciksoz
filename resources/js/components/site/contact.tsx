@@ -3,7 +3,7 @@ import { useMagnetic } from '@/lib/magnetic';
 import type { Profile } from '@/types/portfolio';
 import { ArrowUpRight } from '@phosphor-icons/react';
 import { useRef } from 'react';
-import { useTextFormation } from '../bits/text';
+import { contentRight, useTextFormation } from '../bits/text';
 import { SplitReveal } from '../motion/split-reveal';
 
 const external = (href: string) => (href.startsWith('http') ? { target: '_blank', rel: 'noreferrer' } : {});
@@ -29,7 +29,12 @@ export function Contact({ profile }: { profile: Profile | null }) {
         root,
         '200',
         (vw, vh) => {
-            if (vw >= 1024) return { x: vw * 0.58, y: vh * 0.18, w: vw * 0.36, h: vh * 0.34 };
+            if (vw >= 1024) {
+                // Beside the heading: follows the section's top, since the page often cannot scroll it any higher.
+                const w = Math.min(vw * 0.36, 640);
+                const top = root.current?.getBoundingClientRect().top ?? 0;
+                return { x: contentRight(vw) - w, y: Math.max(vh * 0.12, top + 48), w, h: vh * 0.34 };
+            }
             const r = strip.current?.getBoundingClientRect();
             return r && r.width ? { x: r.left, y: r.top, w: r.width, h: r.height } : null;
         },

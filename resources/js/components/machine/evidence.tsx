@@ -163,16 +163,22 @@ function Wait({ data }: { data: RunData }) {
     const server = Math.min(ttfb, data.trace.duration_ms);
     const share = ttfb ? server / ttfb : 1;
     return (
-        <Frame label="time to first byte, split" foot="The server owns only the middle of the wait; the rest is distance.">
-            <div className="px-4 py-5">
-                <div className="flex h-3 w-full">
+        <Frame label="time to first byte, split" foot="responseStart minus requestStart, from the browser's Resource Timing entry.">
+            {/* Centred in whatever height the frame has, and thicker where there is room. */}
+            <div className="flex h-full min-h-[96px] flex-col justify-center gap-3 px-4 py-5">
+                <div className="flex justify-between font-mono text-[12.5px] text-zinc-400">
+                    <span>request leaves</span>
+                    <span>first byte back</span>
+                </div>
+                <div className="flex h-3 w-full lg:h-10">
                     <span className="h-full bg-white/20" style={{ width: `${((1 - share) / 2) * 100}%` }} />
                     <span className="h-full bg-zinc-100" style={{ width: `${share * 100}%` }} />
                     <span className="h-full bg-white/20" style={{ width: `${((1 - share) / 2) * 100}%` }} />
                 </div>
-                <div className="mt-3 flex flex-wrap justify-between gap-3 font-mono text-[12.5px] text-zinc-400">
+                <div className="flex flex-wrap justify-between gap-3 font-mono text-[12.5px] text-zinc-400">
                     <span>out and back: {ms(ttfb - server)} ms</span>
                     <span className="text-zinc-100">server: {ms(server)} ms</span>
+                    <span>total: {ms(ttfb)} ms</span>
                 </div>
             </div>
         </Frame>

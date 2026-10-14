@@ -2,7 +2,7 @@ import { gsap, prefersReducedMotion, SCRAMBLE_CHARS, ScrollTrigger, useGSAP } fr
 import type { Decision } from '@/types/portfolio';
 import { Plus } from '@phosphor-icons/react';
 import { useRef, useState } from 'react';
-import { useTextFormation } from '../bits/text';
+import { contentRight, useTextFormation } from '../bits/text';
 import { SectionHead } from './section-head';
 import { SectionState, type Loadable } from './section-state';
 
@@ -16,10 +16,13 @@ export function Rules({ state }: { state: Loadable<Decision[]> }) {
     const decisions = state.data ?? [];
     const [open, setOpen] = useState(0);
 
-    // While the rules are on screen, the page's bits spell the open rule's number in the right-hand third.
-    useTextFormation('rules', root, open >= 0 ? String(open + 1).padStart(2, '0') : null, (vw, vh) =>
-        vw < 1024 ? null : { x: vw * 0.66, y: vh * 0.3, w: vw * 0.28, h: vh * 0.4 },
-    );
+    // While the rules are on screen, the page's bits spell the open rule's number in the right-hand
+    // third, stopping short of the column of open/close marks.
+    useTextFormation('rules', root, open >= 0 ? String(open + 1).padStart(2, '0') : null, (vw, vh) => {
+        if (vw < 1024) return null;
+        const w = Math.min(vw * 0.24, 420);
+        return { x: contentRight(vw) - 64 - w, y: vh * 0.3, w, h: vh * 0.36 };
+    });
 
     const { contextSafe } = useGSAP(
         () => {

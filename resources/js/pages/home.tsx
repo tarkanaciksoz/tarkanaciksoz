@@ -28,7 +28,11 @@ function useApi<T>(path: string): Loadable<T> {
         let alive = true;
         setState((s) => ({ ...s, loading: true, error: false }));
         apiGet<{ data: T }>(path)
-            .then((result) => alive && setState({ data: result.body.data, loading: false, error: result.status >= 400 }))
+            .then((result) => {
+                if (!alive) return;
+                const ok = result.status < 400;
+                setState({ data: ok ? result.body.data : null, loading: false, error: !ok });
+            })
             .catch(() => alive && setState({ data: null, loading: false, error: true }));
         return () => {
             alive = false;
@@ -75,6 +79,8 @@ export default function Home() {
         apiGet<StackResponse>('/api/stack')
             .then((result) => {
                 if (!alive) return;
+                // A 429 or 500 still parses as JSON; it is an error body, not a map.
+                if (result.status >= 400) return setStack({ data: null, loading: false, error: true, reload });
                 setStack({ data: result.body, loading: false, error: false, reload });
                 setBytes(new TextEncoder().encode(result.raw).length);
             })

@@ -6,6 +6,9 @@ import { RED, WHITE, type Targets } from './types';
 type Box = { x: number; y: number; w: number; h: number };
 
 const COLS = 140;
+
+/** Right edge of the page's content column (max-w-[1600px] with lg:px-12), so a formation never runs into the gutter. */
+export const contentRight = (vw: number) => vw - Math.max(0, (vw - 1600) / 2) - 48;
 const FONT = '{size} "Geist Pixel", "Geist Mono", monospace';
 
 /**
